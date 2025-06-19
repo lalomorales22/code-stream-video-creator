@@ -1,10 +1,10 @@
 # CodeStream
 
 **Create stunning vertical videos with streaming code animations**
+<img width="811" alt="Screenshot 2025-06-19 at 12 04 09 PM" src="https://github.com/user-attachments/assets/9808b09c-1d73-4dcb-a0d8-79f52985a524" />
 
 [![Built with Bolt](https://img.shields.io/badge/Built%20with-Bolt-blue?style=for-the-badge&logo=lightning&logoColor=white)](https://bolt.new)
 
-🎬 [Live Demo](https://startling-kataifi-7e9b0f.netlify.app)
 
 ## Inspiration
 
