@@ -2,6 +2,8 @@
 
 **Create stunning vertical videos with streaming code animations**
 
+[![Built with Bolt](https://img.shields.io/badge/Built%20with-Bolt-blue?style=for-the-badge&logo=lightning&logoColor=white)](https://bolt.new)
+
 🎬 [Live Demo](https://startling-kataifi-7e9b0f.netlify.app)
 
 ## Inspiration
@@ -37,6 +39,7 @@ CodeStream is a web application that transforms static code files into dynamic, 
 - **Database**: SQL.js with IndexedDB for client-side video storage
 - **Video Recording**: Canvas API with MediaRecorder for high-quality MP4 generation
 - **Build Tool**: Vite for fast development and optimized production builds
+- **Development Platform**: Built with [Bolt](https://bolt.new) for rapid prototyping and deployment
 
 ### Architecture Decisions
 1. **Component-Based Design**: Modular React components for maintainability
@@ -187,3 +190,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 **Built with ❤️ for the developer community**
+
+*Powered by [Bolt](https://bolt.new) - The fastest way to build and deploy web applications*

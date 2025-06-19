@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Upload, Play, Pause, Square, Settings, Film } from 'lucide-react';
+import { Upload, Play, Pause, Square, Settings, Film, ExternalLink } from 'lucide-react';
 import FileManager from './components/FileManager';
 import CodeStreamer from './components/CodeStreamer';
 import ControlPanel from './components/ControlPanel';
@@ -102,9 +102,23 @@ function App() {
               CodeStream
             </h1>
           </div>
-          <p className="text-gray-400 text-xl font-medium">
+          <p className="text-gray-400 text-xl font-medium mb-6">
             Create stunning vertical videos with streaming code animations
           </p>
+          
+          {/* Built with Bolt Badge */}
+          <div className="flex justify-center mb-4">
+            <a
+              href="https://bolt.new"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors border-2 border-blue-600 hover:border-blue-700"
+            >
+              <span className="text-lg">⚡</span>
+              Built with Bolt
+              <ExternalLink className="w-4 h-4" />
+            </a>
+          </div>
         </header>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
