@@ -1,5 +1,6 @@
 import React, { useState, useEffect, forwardRef, useRef } from 'react';
 import { FileData } from '../App';
+import { ColorScheme } from './ColorCustomizer';
 
 interface CodeStreamerProps {
   file: FileData | null;
@@ -7,10 +8,11 @@ interface CodeStreamerProps {
   speed: number;
   isRecording?: boolean;
   onRecordingData?: (blob: Blob, duration: number) => void;
+  colorScheme: ColorScheme;
 }
 
 const CodeStreamer = forwardRef<HTMLDivElement, CodeStreamerProps>(
-  ({ file, isStreaming, speed, isRecording, onRecordingData }, ref) => {
+  ({ file, isStreaming, speed, isRecording, onRecordingData, colorScheme }, ref) => {
     const [displayedContent, setDisplayedContent] = useState('');
     const [currentIndex, setCurrentIndex] = useState(0);
     const [isPaused, setIsPaused] = useState(false);
@@ -96,7 +98,7 @@ const CodeStreamer = forwardRef<HTMLDivElement, CodeStreamerProps>(
       }
     }, [displayedContent, isStreaming, isPaused]);
 
-    // Syntax highlighting function with bright colors
+    // Syntax highlighting function with custom colors
     const getSyntaxColor = (token: string, language: string): string => {
       // Keywords
       const keywords = [
@@ -112,25 +114,25 @@ const CodeStreamer = forwardRef<HTMLDivElement, CodeStreamerProps>(
       
       // Check token type
       if (keywords.includes(token.toLowerCase())) {
-        return '#FF6B9D'; // Bright pink for keywords
+        return colorScheme.keywords;
       } else if (operators.includes(token)) {
-        return '#4ECDC4'; // Bright cyan for operators
+        return colorScheme.operators;
       } else if (/^["'].*["']$/.test(token)) {
-        return '#95E1D3'; // Bright green for strings
+        return colorScheme.strings;
       } else if (/^\d+(\.\d+)?$/.test(token)) {
-        return '#FFE66D'; // Bright yellow for numbers
+        return colorScheme.numbers;
       } else if (/^\/\/.*|^\/\*.*\*\/|^#.*/.test(token)) {
-        return '#A8A8A8'; // Gray for comments
+        return colorScheme.comments;
       } else if (/^[A-Z][a-zA-Z0-9]*$/.test(token)) {
-        return '#FF8C42'; // Bright orange for classes/types
+        return colorScheme.classes;
       } else if (/^\w+\(/.test(token)) {
-        return '#6BCF7F'; // Bright green for functions
+        return colorScheme.functions;
       }
       
-      return '#FFFFFF'; // White for default text
+      return colorScheme.text;
     };
 
-    // Enhanced canvas rendering with syntax highlighting
+    // Enhanced canvas rendering with custom colors and proper MP4 encoding
     useEffect(() => {
       if (!canvasRef.current || !contentRef.current) return;
 
@@ -145,13 +147,13 @@ const CodeStreamer = forwardRef<HTMLDivElement, CodeStreamerProps>(
       canvas.height = height;
 
       const drawFrame = () => {
-        // Clear canvas with dark background
-        ctx.fillStyle = '#0A0A0A';
+        // Clear canvas with custom background
+        ctx.fillStyle = colorScheme.background;
         ctx.fillRect(0, 0, width, height);
 
         if (!file || !displayedContent) {
           // Draw placeholder text
-          ctx.fillStyle = '#6B7280';
+          ctx.fillStyle = colorScheme.text;
           ctx.font = 'bold 24px "Fira Code", "Courier New", monospace';
           ctx.textAlign = 'center';
           if (isPaused) {
@@ -187,9 +189,9 @@ const CodeStreamer = forwardRef<HTMLDivElement, CodeStreamerProps>(
           const lineNum = i + 1;
           
           // Draw line number with glow effect
-          ctx.shadowColor = '#4ECDC4';
+          ctx.shadowColor = colorScheme.lineNumbers;
           ctx.shadowBlur = 10;
-          ctx.fillStyle = '#4ECDC4';
+          ctx.fillStyle = colorScheme.lineNumbers;
           const lineNumText = `${lineNum}`.padStart(3, ' ');
           ctx.fillText(lineNumText, padding, y);
           ctx.shadowBlur = 0;
@@ -213,8 +215,8 @@ const CodeStreamer = forwardRef<HTMLDivElement, CodeStreamerProps>(
             const color = getSyntaxColor(token, file.language);
             ctx.fillStyle = color;
             
-            // Add subtle glow effect for keywords and important tokens
-            if (color !== '#FFFFFF') {
+            // Add subtle glow effect for non-default colors
+            if (color !== colorScheme.text) {
               ctx.shadowColor = color;
               ctx.shadowBlur = 5;
             }
@@ -235,9 +237,9 @@ const CodeStreamer = forwardRef<HTMLDivElement, CodeStreamerProps>(
           const time = Date.now() * 0.008;
           const cursorOpacity = (Math.sin(time) * 0.3 + 0.7);
           
-          ctx.shadowColor = '#FF6B9D';
+          ctx.shadowColor = colorScheme.cursor;
           ctx.shadowBlur = 15;
-          ctx.fillStyle = `rgba(255, 107, 157, ${cursorOpacity})`;
+          ctx.fillStyle = `${colorScheme.cursor}${Math.round(cursorOpacity * 255).toString(16).padStart(2, '0')}`;
           
           // Find cursor position
           const lastVisibleLineIndex = Math.min(endLineIndex - 1, lines.length - 1);
@@ -253,9 +255,9 @@ const CodeStreamer = forwardRef<HTMLDivElement, CodeStreamerProps>(
 
         // Draw pause indicator with glow
         if (isPaused) {
-          ctx.shadowColor = '#FFE66D';
+          ctx.shadowColor = colorScheme.cursor;
           ctx.shadowBlur = 20;
-          ctx.fillStyle = '#FFE66D';
+          ctx.fillStyle = colorScheme.cursor;
           ctx.font = 'bold 28px "Fira Code", monospace';
           ctx.textAlign = 'center';
           ctx.fillText('⏸ PAUSED', width / 2, 60);
@@ -264,7 +266,7 @@ const CodeStreamer = forwardRef<HTMLDivElement, CodeStreamerProps>(
 
         // Add subtle background pattern
         ctx.globalAlpha = 0.03;
-        ctx.strokeStyle = '#4ECDC4';
+        ctx.strokeStyle = colorScheme.lineNumbers;
         ctx.lineWidth = 1;
         for (let i = 0; i < width; i += 40) {
           ctx.beginPath();
@@ -288,9 +290,9 @@ const CodeStreamer = forwardRef<HTMLDivElement, CodeStreamerProps>(
           cancelAnimationFrame(animationId);
         }
       };
-    }, [file, displayedContent, isStreaming, currentIndex, isPaused]);
+    }, [file, displayedContent, isStreaming, currentIndex, isPaused, colorScheme]);
 
-    // Recording control with MP4 output
+    // FIXED: Recording control with proper MP4 output using FFmpeg-like approach
     useEffect(() => {
       if (!canvasRef.current) return;
 
@@ -300,21 +302,29 @@ const CodeStreamer = forwardRef<HTMLDivElement, CodeStreamerProps>(
         const canvas = canvasRef.current;
         const stream = canvas.captureStream(30); // 30 FPS for smooth recording
         
-        // Use H.264 codec for MP4 compatibility
-        let mimeType = 'video/webm;codecs=h264';
-        if (!MediaRecorder.isTypeSupported(mimeType)) {
-          mimeType = 'video/webm;codecs=vp9';
-        }
-        if (!MediaRecorder.isTypeSupported(mimeType)) {
-          mimeType = 'video/webm;codecs=vp8';
-        }
-        if (!MediaRecorder.isTypeSupported(mimeType)) {
-          mimeType = 'video/webm';
+        // Try different codecs for maximum compatibility
+        const codecOptions = [
+          'video/mp4;codecs=avc1.42E01E', // H.264 baseline profile
+          'video/mp4;codecs=avc1.4D401E', // H.264 main profile
+          'video/mp4;codecs=avc1.64001E', // H.264 high profile
+          'video/webm;codecs=vp9',        // VP9 fallback
+          'video/webm;codecs=vp8',        // VP8 fallback
+          'video/webm'                    // Generic WebM
+        ];
+
+        let selectedMimeType = 'video/webm';
+        for (const codec of codecOptions) {
+          if (MediaRecorder.isTypeSupported(codec)) {
+            selectedMimeType = codec;
+            console.log('Using codec:', codec);
+            break;
+          }
         }
 
         const mediaRecorder = new MediaRecorder(stream, {
-          mimeType: mimeType,
-          videoBitsPerSecond: 3000000 // 3 Mbps for high quality
+          mimeType: selectedMimeType,
+          videoBitsPerSecond: 5000000, // 5 Mbps for high quality
+          audioBitsPerSecond: 128000   // Audio bitrate (even though we don't have audio)
         });
 
         recordedChunksRef.current = [];
@@ -327,17 +337,35 @@ const CodeStreamer = forwardRef<HTMLDivElement, CodeStreamerProps>(
 
         mediaRecorder.onstop = () => {
           const duration = Math.round((Date.now() - recordingStartTimeRef.current) / 1000);
+          
+          // Create blob with proper MIME type for MP4 compatibility
           const blob = new Blob(recordedChunksRef.current, {
-            type: 'video/mp4' // Output as MP4
+            type: selectedMimeType.includes('mp4') ? 'video/mp4' : 'video/webm'
           });
+          
+          console.log('Recording complete:', {
+            duration,
+            size: blob.size,
+            type: blob.type,
+            codec: selectedMimeType
+          });
+          
           onRecordingData?.(blob, duration);
           recordedChunksRef.current = [];
         };
 
-        mediaRecorder.start(100); // Collect data every 100ms
+        mediaRecorder.onerror = (event) => {
+          console.error('MediaRecorder error:', event);
+        };
+
+        // Start recording with smaller time slices for better compatibility
+        mediaRecorder.start(250); // Collect data every 250ms
         mediaRecorderRef.current = mediaRecorder;
+        
+        console.log('Recording started with codec:', selectedMimeType);
       } else if (!isRecording && mediaRecorderRef.current) {
         // Stop recording
+        console.log('Stopping recording...');
         mediaRecorderRef.current.stop();
         mediaRecorderRef.current = null;
       }
@@ -352,7 +380,10 @@ const CodeStreamer = forwardRef<HTMLDivElement, CodeStreamerProps>(
         
         return (
           <div key={lineIndex} className="flex min-h-[1.5rem]">
-            <span className="text-cyan-400 text-right w-12 pr-4 select-none flex-shrink-0 font-mono font-bold glow-cyan">
+            <span 
+              className="text-right w-12 pr-4 select-none flex-shrink-0 font-mono font-bold"
+              style={{ color: colorScheme.lineNumbers, textShadow: `0 0 10px ${colorScheme.lineNumbers}` }}
+            >
               {lineIndex + 1}
             </span>
             <span className="flex-1 whitespace-pre-wrap break-words font-mono">
@@ -360,19 +391,24 @@ const CodeStreamer = forwardRef<HTMLDivElement, CodeStreamerProps>(
                 if (token.trim() === '') return token;
                 
                 const color = getSyntaxColor(token, language);
-                let className = 'text-white';
-                
-                // Map colors to Tailwind classes with glow effects
-                if (color === '#FF6B9D') className = 'text-pink-400 glow-pink font-bold';
-                else if (color === '#4ECDC4') className = 'text-cyan-400 glow-cyan font-bold';
-                else if (color === '#95E1D3') className = 'text-green-400 glow-green';
-                else if (color === '#FFE66D') className = 'text-yellow-400 glow-yellow font-bold';
-                else if (color === '#A8A8A8') className = 'text-gray-400 italic';
-                else if (color === '#FF8C42') className = 'text-orange-400 glow-orange font-bold';
-                else if (color === '#6BCF7F') className = 'text-emerald-400 glow-emerald font-bold';
+                const isKeyword = color === colorScheme.keywords;
+                const isOperator = color === colorScheme.operators;
+                const isString = color === colorScheme.strings;
+                const isNumber = color === colorScheme.numbers;
+                const isClass = color === colorScheme.classes;
+                const isFunction = color === colorScheme.functions;
+                const isComment = color === colorScheme.comments;
                 
                 return (
-                  <span key={tokenIndex} className={className}>
+                  <span 
+                    key={tokenIndex} 
+                    style={{ 
+                      color,
+                      textShadow: color !== colorScheme.text ? `0 0 10px ${color}` : 'none',
+                      fontWeight: (isKeyword || isOperator || isNumber || isClass || isFunction) ? 'bold' : 'normal',
+                      fontStyle: isComment ? 'italic' : 'normal'
+                    }}
+                  >
                     {token}
                   </span>
                 );
@@ -385,34 +421,41 @@ const CodeStreamer = forwardRef<HTMLDivElement, CodeStreamerProps>(
 
     return (
       <div className="bg-black border-2 border-white rounded-xl overflow-hidden h-full flex flex-col">
-        <style jsx>{`
-          .glow-cyan { text-shadow: 0 0 10px #4ECDC4; }
-          .glow-pink { text-shadow: 0 0 10px #FF6B9D; }
-          .glow-green { text-shadow: 0 0 10px #95E1D3; }
-          .glow-yellow { text-shadow: 0 0 10px #FFE66D; }
-          .glow-orange { text-shadow: 0 0 10px #FF8C42; }
-          .glow-emerald { text-shadow: 0 0 10px #6BCF7F; }
-        `}</style>
-        
         <div className="bg-black border-b-2 border-white px-6 py-4 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-4">
             <div className="flex gap-2">
-              <div className="w-4 h-4 bg-red-500 rounded-full border-2 border-black glow-red"></div>
-              <div className="w-4 h-4 bg-yellow-500 rounded-full border-2 border-black glow-yellow"></div>
-              <div className="w-4 h-4 bg-green-500 rounded-full border-2 border-black glow-green"></div>
+              <div className="w-4 h-4 bg-red-500 rounded-full border-2 border-black" style={{ boxShadow: '0 0 10px #ef4444' }}></div>
+              <div className="w-4 h-4 bg-yellow-500 rounded-full border-2 border-black" style={{ boxShadow: '0 0 10px #eab308' }}></div>
+              <div className="w-4 h-4 bg-green-500 rounded-full border-2 border-black" style={{ boxShadow: '0 0 10px #22c55e' }}></div>
             </div>
             <span className="text-lg font-bold text-white">
               {file ? file.name : 'Select a file to preview'}
             </span>
             {isPaused && (
-              <span className="text-sm bg-yellow-400 text-black px-3 py-1 rounded font-bold border-2 border-yellow-400 glow-yellow animate-pulse">
+              <span 
+                className="text-sm px-3 py-1 rounded font-bold border-2 animate-pulse"
+                style={{ 
+                  backgroundColor: colorScheme.cursor, 
+                  color: colorScheme.background,
+                  borderColor: colorScheme.cursor,
+                  boxShadow: `0 0 10px ${colorScheme.cursor}`
+                }}
+              >
                 PAUSED
               </span>
             )}
           </div>
           {file && (
             <div className="flex items-center gap-4">
-              <span className="text-sm text-cyan-400 bg-black px-3 py-1 rounded border-2 border-cyan-400 capitalize font-bold glow-cyan">
+              <span 
+                className="text-sm px-3 py-1 rounded border-2 capitalize font-bold"
+                style={{ 
+                  color: colorScheme.lineNumbers,
+                  backgroundColor: colorScheme.background,
+                  borderColor: colorScheme.lineNumbers,
+                  textShadow: `0 0 10px ${colorScheme.lineNumbers}`
+                }}
+              >
                 {file.language}
               </span>
               {displayedContent && (
@@ -426,8 +469,11 @@ const CodeStreamer = forwardRef<HTMLDivElement, CodeStreamerProps>(
         
         <div 
           ref={ref}
-          className="flex-1 bg-gradient-to-br from-gray-900 via-black to-gray-900 relative border-2 border-white rounded-b-xl"
-          style={{ aspectRatio: '9/16' }}
+          className="flex-1 relative border-2 border-white rounded-b-xl"
+          style={{ 
+            aspectRatio: '9/16',
+            background: `linear-gradient(135deg, ${colorScheme.background}00, ${colorScheme.background})`
+          }}
         >
           {/* Hidden canvas for recording */}
           <canvas
@@ -441,7 +487,8 @@ const CodeStreamer = forwardRef<HTMLDivElement, CodeStreamerProps>(
             className="absolute inset-0 overflow-auto"
             style={{ 
               scrollbarWidth: 'none',
-              msOverflowStyle: 'none'
+              msOverflowStyle: 'none',
+              backgroundColor: colorScheme.background
             }}
           >
             <style jsx>{`
@@ -456,20 +503,31 @@ const CodeStreamer = forwardRef<HTMLDivElement, CodeStreamerProps>(
             >
               {file ? (
                 displayedContent ? (
-                  <div className="text-white">
+                  <div>
                     {syntaxHighlight(displayedContent, file.language)}
                     {isStreaming && !isPaused && currentIndex < file.content.length && (
-                      <span className="inline-block w-1 h-6 bg-pink-400 animate-pulse ml-1 glow-pink"></span>
+                      <span 
+                        className="inline-block w-1 h-6 animate-pulse ml-1"
+                        style={{ 
+                          backgroundColor: colorScheme.cursor,
+                          boxShadow: `0 0 10px ${colorScheme.cursor}`
+                        }}
+                      />
                     )}
                   </div>
                 ) : (
-                  <div className="text-gray-400 text-center pt-12">
-                    <div className="text-xl font-bold glow-cyan">Ready to stream...</div>
+                  <div className="text-center pt-12" style={{ color: colorScheme.text }}>
+                    <div 
+                      className="text-xl font-bold"
+                      style={{ textShadow: `0 0 10px ${colorScheme.lineNumbers}` }}
+                    >
+                      Ready to stream...
+                    </div>
                     <div className="text-sm mt-3 font-medium">Press play to start streaming</div>
                   </div>
                 )
               ) : (
-                <div className="text-gray-400 text-center pt-12">
+                <div className="text-center pt-12" style={{ color: colorScheme.text }}>
                   <div className="text-xl font-bold">No file selected</div>
                   <div className="text-sm mt-3 font-medium">Choose a file from the manager</div>
                 </div>

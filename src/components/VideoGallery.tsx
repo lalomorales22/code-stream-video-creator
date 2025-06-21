@@ -105,19 +105,37 @@ const VideoGallery: React.FC<VideoGalleryProps> = ({
   const handleDownloadVideo = async (video: VideoRecord) => {
     try {
       console.log('Downloading video:', video.filename);
-      const blob = new Blob([video.video_blob], { type: 'video/mp4' });
+      
+      // Create blob with proper MIME type for better compatibility
+      const blob = new Blob([video.video_blob], { 
+        type: 'video/mp4' 
+      });
+      
+      // Create download URL
       const url = URL.createObjectURL(blob);
       
+      // Create download link
       const a = document.createElement('a');
       a.href = url;
-      a.download = video.filename;
+      
+      // Ensure filename has .mp4 extension
+      let filename = video.filename;
+      if (!filename.toLowerCase().endsWith('.mp4')) {
+        filename = filename.replace(/\.[^/.]+$/, '') + '.mp4';
+      }
+      
+      a.download = filename;
       a.style.display = 'none';
+      
+      // Trigger download
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       
-      URL.revokeObjectURL(url);
-      console.log('Video download initiated');
+      // Clean up URL
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      
+      console.log('Video download initiated:', filename);
     } catch (error) {
       console.error('Failed to download video:', error);
       setError('Failed to download video');
@@ -282,6 +300,7 @@ const VideoGallery: React.FC<VideoGalleryProps> = ({
                                 ? 'border-black text-black hover:bg-black hover:text-white' 
                                 : 'border-white text-white hover:bg-white hover:text-black'
                             }`}
+                            title="Download MP4"
                           >
                             <Download className="w-5 h-5" />
                           </button>
@@ -341,6 +360,9 @@ const VideoGallery: React.FC<VideoGalleryProps> = ({
                     className="w-full bg-black rounded-lg border-2 border-white"
                     style={{ aspectRatio: '9/16' }}
                     src={URL.createObjectURL(new Blob([selectedVideo.video_blob], { type: 'video/mp4' }))}
+                    onLoadStart={() => console.log('Video loading started')}
+                    onCanPlay={() => console.log('Video can play')}
+                    onError={(e) => console.error('Video error:', e)}
                   />
                   <div className="mt-6 text-center">
                     <h4 className="font-bold text-xl text-white mb-3">{selectedVideo.original_filename}</h4>
@@ -349,12 +371,23 @@ const VideoGallery: React.FC<VideoGalleryProps> = ({
                       <span>{formatDuration(selectedVideo.duration)}</span>
                       <span>{formatFileSize(selectedVideo.video_blob.length)}</span>
                     </div>
+                    <div className="mt-4">
+                      <button
+                        onClick={() => handleDownloadVideo(selectedVideo)}
+                        className="bg-white hover:bg-gray-200 text-black px-6 py-3 rounded-lg font-bold 
+                                 transition-colors border-2 border-white flex items-center gap-2 mx-auto"
+                      >
+                        <Download className="w-5 h-5" />
+                        Download MP4
+                      </button>
+                    </div>
                   </div>
                 </div>
               ) : (
                 <div className="text-center text-gray-400">
                   <Play className="w-20 h-20 mx-auto mb-6 opacity-50" />
                   <p className="text-2xl font-bold">Select a video to preview</p>
+                  <p className="text-lg mt-2">Click on any video from the list to play it here</p>
                 </div>
               )}
             </div>

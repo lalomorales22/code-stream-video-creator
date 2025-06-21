@@ -4,6 +4,7 @@ import FileManager from './components/FileManager';
 import CodeStreamer from './components/CodeStreamer';
 import ControlPanel from './components/ControlPanel';
 import VideoGallery from './components/VideoGallery';
+import ColorCustomizer, { ColorScheme } from './components/ColorCustomizer';
 
 export interface FileData {
   id: string;
@@ -12,6 +13,20 @@ export interface FileData {
   language: string;
 }
 
+const defaultColorScheme: ColorScheme = {
+  keywords: '#FF6B9D',
+  operators: '#4ECDC4',
+  strings: '#95E1D3',
+  numbers: '#FFE66D',
+  comments: '#A8A8A8',
+  classes: '#FF8C42',
+  functions: '#6BCF7F',
+  background: '#0A0A0A',
+  text: '#FFFFFF',
+  lineNumbers: '#4ECDC4',
+  cursor: '#FF6B9D'
+};
+
 function App() {
   const [files, setFiles] = useState<FileData[]>([]);
   const [selectedFile, setSelectedFile] = useState<FileData | null>(null);
@@ -19,6 +34,8 @@ function App() {
   const [streamSpeed, setStreamSpeed] = useState(50);
   const [isRecording, setIsRecording] = useState(false);
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
+  const [isColorCustomizerOpen, setIsColorCustomizerOpen] = useState(false);
+  const [colorScheme, setColorScheme] = useState<ColorScheme>(defaultColorScheme);
   const [pendingVideo, setPendingVideo] = useState<{
     blob: Blob;
     filename: string;
@@ -90,6 +107,14 @@ function App() {
     setIsGalleryOpen(false);
   };
 
+  const handleColorSchemeChange = (newColorScheme: ColorScheme) => {
+    setColorScheme(newColorScheme);
+  };
+
+  const handleToggleColorCustomizer = () => {
+    setIsColorCustomizerOpen(!isColorCustomizerOpen);
+  };
+
   return (
     <div className="min-h-screen bg-black text-white">
       <div className="container mx-auto px-6 py-8">
@@ -123,12 +148,20 @@ function App() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* File Manager */}
-          <div className="lg:col-span-1">
+          <div className="lg:col-span-1 space-y-6">
             <FileManager
               files={files}
               onFilesUploaded={handleFilesUploaded}
               onFileSelect={handleFileSelect}
               selectedFile={selectedFile}
+            />
+            
+            {/* Color Customizer */}
+            <ColorCustomizer
+              colorScheme={colorScheme}
+              onColorChange={handleColorSchemeChange}
+              isOpen={isColorCustomizerOpen}
+              onToggle={handleToggleColorCustomizer}
             />
           </div>
 
@@ -141,6 +174,7 @@ function App() {
               speed={streamSpeed}
               isRecording={isRecording}
               onRecordingData={handleRecordingData}
+              colorScheme={colorScheme}
             />
           </div>
 
