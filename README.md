@@ -1,9 +1,9 @@
 # CodeStream
 
-**Create stunning vertical videos with streaming code animations**
-<img width="811" alt="Screenshot 2025-06-19 at 12 04 09 PM" src="https://github.com/user-attachments/assets/9808b09c-1d73-4dcb-a0d8-79f52985a524" />
+**Create stunning vertical videos with streaming code animations**![Screenshot 2025-06-21 at 4 34 49 PM](https://github.com/user-attachments/assets/c330bf41-0b7b-4a9e-9cf7-c6f3542f1670)
 
-[![Built with Bolt](https://img.shields.io/badge/Built%20with-Bolt-blue?style=for-the-badge&logo=lightning&logoColor=white)](https://bolt.new)
+![Screenshot 2025-06-21 at 4 34 39 PM](https://github.com/user-attachments/assets/b375a683-e659-4162-a0cc-4110a0342dd7)
+
 
 
 ## Inspiration
