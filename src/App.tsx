@@ -116,7 +116,7 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="min-h-screen bg-black text-white relative">
       <div className="container mx-auto px-6 py-8">
         <header className="text-center mb-12">
           <div className="flex items-center justify-center gap-3 mb-6">
@@ -130,20 +130,6 @@ function App() {
           <p className="text-gray-400 text-xl font-medium mb-6">
             Create stunning vertical videos with streaming code animations
           </p>
-          
-          {/* Built with Bolt Badge */}
-          <div className="flex justify-center mb-4">
-            <a
-              href="https://bolt.new"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors border-2 border-blue-600 hover:border-blue-700"
-            >
-              <span className="text-lg">⚡</span>
-              Built with Bolt
-              <ExternalLink className="w-4 h-4" />
-            </a>
-          </div>
         </header>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -211,6 +197,22 @@ function App() {
             </div>
           </div>
         )}
+      </div>
+
+      {/* Built with Bolt Tag - Bottom Right */}
+      <div className="fixed bottom-6 right-6 z-40">
+        <a
+          href="https://bolt.new"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-2 bg-black border-2 border-white text-white px-4 py-2 rounded-lg 
+                   font-bold text-sm transition-all duration-200 hover:bg-white hover:text-black hover:scale-105
+                   shadow-lg backdrop-blur-sm"
+          style={{ textShadow: '0 0 10px rgba(255, 255, 255, 0.3)' }}
+        >
+          <span className="text-lg">⚡</span>
+          Built with Bolt
+        </a>
       </div>
 
       {/* Video Gallery Modal */}
