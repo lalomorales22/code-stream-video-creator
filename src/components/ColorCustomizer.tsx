@@ -228,7 +228,7 @@ const ColorCustomizer: React.FC<ColorCustomizerProps> = ({
                 <span style={{ color: colorScheme.text }}>name</span>
                 <span style={{ color: colorScheme.operators }}>)</span>
                 <span style={{ color: colorScheme.text }}> </span>
-                <span style={{ color: colorScheme.operators }}>{'{'}</span>
+                <span style={{ color: colorScheme.operators }}>{"{"}</span>
               </div>
               <div className="flex">
                 <span style={{ color: colorScheme.lineNumbers }} className="w-8 text-right pr-2">2</span>
@@ -258,7 +258,7 @@ const ColorCustomizer: React.FC<ColorCustomizerProps> = ({
               </div>
               <div className="flex">
                 <span style={{ color: colorScheme.lineNumbers }} className="w-8 text-right pr-2">5</span>
-                <span style={{ color: colorScheme.operators }}>}</span>
+                <span style={{ color: colorScheme.operators }}>{"}"}</span>
                 <span 
                   style={{ backgroundColor: colorScheme.cursor }} 
                   className="inline-block w-1 h-4 ml-1 animate-pulse"
