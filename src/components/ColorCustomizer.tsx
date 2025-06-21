@@ -228,7 +228,7 @@ const ColorCustomizer: React.FC<ColorCustomizerProps> = ({
                 <span style={{ color: colorScheme.text }}>name</span>
                 <span style={{ color: colorScheme.operators }}>)</span>
                 <span style={{ color: colorScheme.text }}> </span>
-                <span style={{ color: colorScheme.operators }}>{</span>
+                <span style={{ color: colorScheme.operators }}>{'{'}</span>
               </div>
               <div className="flex">
                 <span style={{ color: colorScheme.lineNumbers }} className="w-8 text-right pr-2">2</span>
