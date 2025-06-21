@@ -16,14 +16,41 @@ const CodeStreamer = forwardRef<HTMLDivElement, CodeStreamerProps>(
     const [displayedContent, setDisplayedContent] = useState('');
     const [currentIndex, setCurrentIndex] = useState(0);
     const [isPaused, setIsPaused] = useState(false);
+    const [recordingTime, setRecordingTime] = useState(0);
     const contentRef = useRef<HTMLDivElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const recordedChunksRef = useRef<Blob[]>([]);
     const recordingStartTimeRef = useRef<number>(0);
+    const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
     const scrollPositionRef = useRef<number>(0);
     const intervalRef = useRef<NodeJS.Timeout | null>(null);
+
+    // Recording timer effect
+    useEffect(() => {
+      if (isRecording) {
+        recordingStartTimeRef.current = Date.now();
+        setRecordingTime(0);
+        
+        recordingTimerRef.current = setInterval(() => {
+          setRecordingTime(Math.floor((Date.now() - recordingStartTimeRef.current) / 1000));
+        }, 1000);
+      } else {
+        if (recordingTimerRef.current) {
+          clearInterval(recordingTimerRef.current);
+          recordingTimerRef.current = null;
+        }
+        setRecordingTime(0);
+      }
+
+      return () => {
+        if (recordingTimerRef.current) {
+          clearInterval(recordingTimerRef.current);
+          recordingTimerRef.current = null;
+        }
+      };
+    }, [isRecording]);
 
     // Reset when file changes
     useEffect(() => {
@@ -132,7 +159,39 @@ const CodeStreamer = forwardRef<HTMLDivElement, CodeStreamerProps>(
       return colorScheme.text;
     };
 
-    // Enhanced canvas rendering with custom colors and proper MP4 encoding
+    // Helper function to wrap text properly for canvas
+    const wrapText = (ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] => {
+      const words = text.split(' ');
+      const lines: string[] = [];
+      let currentLine = '';
+
+      for (const word of words) {
+        const testLine = currentLine + (currentLine ? ' ' : '') + word;
+        const metrics = ctx.measureText(testLine);
+        
+        if (metrics.width > maxWidth && currentLine) {
+          lines.push(currentLine);
+          currentLine = word;
+        } else {
+          currentLine = testLine;
+        }
+      }
+      
+      if (currentLine) {
+        lines.push(currentLine);
+      }
+      
+      return lines;
+    };
+
+    // Format recording time
+    const formatRecordingTime = (seconds: number): string => {
+      const mins = Math.floor(seconds / 60);
+      const secs = seconds % 60;
+      return `${mins}:${secs.toString().padStart(2, '0')}`;
+    };
+
+    // Enhanced canvas rendering with proper text wrapping and vertical layout
     useEffect(() => {
       if (!canvasRef.current || !contentRef.current) return;
 
@@ -164,44 +223,73 @@ const CodeStreamer = forwardRef<HTMLDivElement, CodeStreamerProps>(
           return;
         }
 
-        // Calculate visible area based on current scroll position
-        const lines = displayedContent.split('\n');
-        const lineHeight = 36;
-        const fontSize = 20;
-        const padding = 32;
-        const maxVisibleLines = Math.floor((height - padding * 2) / lineHeight);
-        
-        // Calculate which lines should be visible based on scroll
-        const totalContentHeight = lines.length * lineHeight;
-        const containerHeight = height - padding * 2;
-        const scrollRatio = scrollPositionRef.current / Math.max(1, totalContentHeight - containerHeight);
-        const startLineIndex = Math.floor(scrollRatio * Math.max(0, lines.length - maxVisibleLines));
-        const endLineIndex = Math.min(lines.length, startLineIndex + maxVisibleLines);
+        // Optimized settings for vertical video
+        const fontSize = 16; // Smaller font for better fit
+        const lineHeight = 24; // Tighter line spacing
+        const padding = 20; // Reduced padding
+        const lineNumberWidth = 60; // Space for line numbers
+        const codeStartX = padding + lineNumberWidth;
+        const maxCodeWidth = width - codeStartX - padding; // Available width for code
         
         ctx.font = `${fontSize}px "Fira Code", "Courier New", monospace`;
         ctx.textAlign = 'left';
 
+        // Split content into lines and handle wrapping
+        const originalLines = displayedContent.split('\n');
+        const wrappedLines: { content: string; originalLineNum: number; isWrapped: boolean }[] = [];
+        
+        originalLines.forEach((line, originalIndex) => {
+          if (line.length === 0) {
+            wrappedLines.push({ content: '', originalLineNum: originalIndex + 1, isWrapped: false });
+            return;
+          }
+          
+          // Check if line needs wrapping
+          const lineWidth = ctx.measureText(line).width;
+          if (lineWidth <= maxCodeWidth) {
+            wrappedLines.push({ content: line, originalLineNum: originalIndex + 1, isWrapped: false });
+          } else {
+            // Wrap the line
+            const wrapped = wrapText(ctx, line, maxCodeWidth);
+            wrapped.forEach((wrappedLine, wrapIndex) => {
+              wrappedLines.push({ 
+                content: wrappedLine, 
+                originalLineNum: originalIndex + 1, 
+                isWrapped: wrapIndex > 0 
+              });
+            });
+          }
+        });
+
+        // Calculate visible area
+        const maxVisibleLines = Math.floor((height - padding * 2) / lineHeight);
+        const totalLines = wrappedLines.length;
+        
+        // Auto-scroll to show the latest content
+        const startLineIndex = Math.max(0, totalLines - maxVisibleLines);
+        const endLineIndex = Math.min(totalLines, startLineIndex + maxVisibleLines);
+        
         let y = padding + lineHeight;
         
-        // Draw only visible lines with syntax highlighting
+        // Draw visible lines
         for (let i = startLineIndex; i < endLineIndex; i++) {
-          const line = lines[i] || '';
-          const lineNum = i + 1;
+          const lineData = wrappedLines[i];
           
-          // Draw line number with glow effect
-          ctx.shadowColor = colorScheme.lineNumbers;
-          ctx.shadowBlur = 10;
-          ctx.fillStyle = colorScheme.lineNumbers;
-          const lineNumText = `${lineNum}`.padStart(3, ' ');
-          ctx.fillText(lineNumText, padding, y);
-          ctx.shadowBlur = 0;
+          // Draw line number (only for non-wrapped lines)
+          if (!lineData.isWrapped) {
+            ctx.shadowColor = colorScheme.lineNumbers;
+            ctx.shadowBlur = 8;
+            ctx.fillStyle = colorScheme.lineNumbers;
+            const lineNumText = `${lineData.originalLineNum}`.padStart(3, ' ');
+            ctx.fillText(lineNumText, padding, y);
+            ctx.shadowBlur = 0;
+          }
 
           // Draw code content with syntax highlighting
-          const codeX = padding + 100;
-          let currentX = codeX;
+          let currentX = codeStartX;
           
           // Simple tokenization for syntax highlighting
-          const tokens = line.split(/(\s+|[(){}[\];,.]|["'].*?["']|\w+|[^\w\s])/).filter(token => token.length > 0);
+          const tokens = lineData.content.split(/(\s+|[(){}[\];,.]|["'].*?["']|\w+|[^\w\s])/).filter(token => token.length > 0);
           
           for (const token of tokens) {
             if (token.trim() === '') {
@@ -218,7 +306,7 @@ const CodeStreamer = forwardRef<HTMLDivElement, CodeStreamerProps>(
             // Add subtle glow effect for non-default colors
             if (color !== colorScheme.text) {
               ctx.shadowColor = color;
-              ctx.shadowBlur = 5;
+              ctx.shadowBlur = 3;
             }
             
             ctx.fillText(token, currentX, y);
@@ -241,14 +329,15 @@ const CodeStreamer = forwardRef<HTMLDivElement, CodeStreamerProps>(
           ctx.shadowBlur = 15;
           ctx.fillStyle = `${colorScheme.cursor}${Math.round(cursorOpacity * 255).toString(16).padStart(2, '0')}`;
           
-          // Find cursor position
-          const lastVisibleLineIndex = Math.min(endLineIndex - 1, lines.length - 1);
-          const lastLine = lines[lastVisibleLineIndex] || '';
-          const cursorX = padding + 100 + ctx.measureText(lastLine).width + 8;
-          const cursorY = padding + lineHeight + (lastVisibleLineIndex - startLineIndex) * lineHeight;
-          
-          if (cursorY >= padding && cursorY <= height - padding) {
-            ctx.fillRect(cursorX, cursorY - fontSize, 4, fontSize + 4);
+          // Find cursor position at the end of the last visible line
+          const lastVisibleLine = wrappedLines[endLineIndex - 1];
+          if (lastVisibleLine) {
+            const cursorX = codeStartX + ctx.measureText(lastVisibleLine.content).width + 4;
+            const cursorY = padding + lineHeight + (endLineIndex - 1 - startLineIndex) * lineHeight;
+            
+            if (cursorY >= padding && cursorY <= height - padding) {
+              ctx.fillRect(cursorX, cursorY - fontSize, 3, fontSize + 2);
+            }
           }
           ctx.shadowBlur = 0;
         }
@@ -258,20 +347,44 @@ const CodeStreamer = forwardRef<HTMLDivElement, CodeStreamerProps>(
           ctx.shadowColor = colorScheme.cursor;
           ctx.shadowBlur = 20;
           ctx.fillStyle = colorScheme.cursor;
-          ctx.font = 'bold 28px "Fira Code", monospace';
+          ctx.font = 'bold 24px "Fira Code", monospace';
           ctx.textAlign = 'center';
-          ctx.fillText('⏸ PAUSED', width / 2, 60);
+          ctx.fillText('⏸ PAUSED', width / 2, 50);
           ctx.shadowBlur = 0;
         }
 
-        // Add subtle background pattern
-        ctx.globalAlpha = 0.03;
+        // Draw recording indicator and timer
+        if (isRecording) {
+          // Recording dot
+          ctx.shadowColor = '#FF0000';
+          ctx.shadowBlur = 15;
+          ctx.fillStyle = '#FF0000';
+          ctx.beginPath();
+          ctx.arc(width - 60, 40, 8, 0, 2 * Math.PI);
+          ctx.fill();
+          ctx.shadowBlur = 0;
+          
+          // Recording timer
+          ctx.fillStyle = '#FFFFFF';
+          ctx.font = 'bold 18px "Fira Code", monospace';
+          ctx.textAlign = 'right';
+          ctx.fillText(`REC ${formatRecordingTime(recordingTime)}`, width - 80, 45);
+        }
+
+        // Add subtle grid pattern for professional look
+        ctx.globalAlpha = 0.02;
         ctx.strokeStyle = colorScheme.lineNumbers;
         ctx.lineWidth = 1;
         for (let i = 0; i < width; i += 40) {
           ctx.beginPath();
           ctx.moveTo(i, 0);
           ctx.lineTo(i, height);
+          ctx.stroke();
+        }
+        for (let i = 0; i < height; i += 40) {
+          ctx.beginPath();
+          ctx.moveTo(0, i);
+          ctx.lineTo(width, i);
           ctx.stroke();
         }
         ctx.globalAlpha = 1;
@@ -290,9 +403,9 @@ const CodeStreamer = forwardRef<HTMLDivElement, CodeStreamerProps>(
           cancelAnimationFrame(animationId);
         }
       };
-    }, [file, displayedContent, isStreaming, currentIndex, isPaused, colorScheme]);
+    }, [file, displayedContent, isStreaming, currentIndex, isPaused, colorScheme, isRecording, recordingTime]);
 
-    // FIXED: Recording control with proper MP4 output using FFmpeg-like approach
+    // FIXED: Recording control with proper MP4 output
     useEffect(() => {
       if (!canvasRef.current) return;
 
@@ -304,9 +417,11 @@ const CodeStreamer = forwardRef<HTMLDivElement, CodeStreamerProps>(
         
         // Try different codecs for maximum compatibility
         const codecOptions = [
+          'video/mp4;codecs=avc1.42E01E,mp4a.40.2', // H.264 + AAC
           'video/mp4;codecs=avc1.42E01E', // H.264 baseline profile
           'video/mp4;codecs=avc1.4D401E', // H.264 main profile
           'video/mp4;codecs=avc1.64001E', // H.264 high profile
+          'video/webm;codecs=vp9,opus',   // VP9 + Opus
           'video/webm;codecs=vp9',        // VP9 fallback
           'video/webm;codecs=vp8',        // VP8 fallback
           'video/webm'                    // Generic WebM
@@ -323,7 +438,7 @@ const CodeStreamer = forwardRef<HTMLDivElement, CodeStreamerProps>(
 
         const mediaRecorder = new MediaRecorder(stream, {
           mimeType: selectedMimeType,
-          videoBitsPerSecond: 5000000, // 5 Mbps for high quality
+          videoBitsPerSecond: 8000000, // 8 Mbps for very high quality
           audioBitsPerSecond: 128000   // Audio bitrate (even though we don't have audio)
         });
 
@@ -359,7 +474,7 @@ const CodeStreamer = forwardRef<HTMLDivElement, CodeStreamerProps>(
         };
 
         // Start recording with smaller time slices for better compatibility
-        mediaRecorder.start(250); // Collect data every 250ms
+        mediaRecorder.start(100); // Collect data every 100ms
         mediaRecorderRef.current = mediaRecorder;
         
         console.log('Recording started with codec:', selectedMimeType);
@@ -443,6 +558,17 @@ const CodeStreamer = forwardRef<HTMLDivElement, CodeStreamerProps>(
               >
                 PAUSED
               </span>
+            )}
+            {isRecording && (
+              <div className="flex items-center gap-2">
+                <div 
+                  className="w-3 h-3 bg-red-500 rounded-full animate-pulse"
+                  style={{ boxShadow: '0 0 10px #ef4444' }}
+                />
+                <span className="text-sm font-bold text-white">
+                  REC {formatRecordingTime(recordingTime)}
+                </span>
+              </div>
             )}
           </div>
           {file && (
