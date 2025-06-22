@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Play, Download, Trash2, Calendar, Clock, Code, X, Save, AlertCircle, FileAudio, Mic, Loader2, Users, Edit3, Captions, Sparkles, CheckCircle, Share2, ExternalLink, Image as ImageIcon, Type, Upload } from 'lucide-react';
+import { Play, Download, Trash2, Calendar, Clock, Code, X, Save, AlertCircle, FileAudio, Mic, Loader2, Users, Edit3, Captions, Sparkles, CheckCircle, Share2, ExternalLink, Upload, Image as ImageIcon } from 'lucide-react';
 import { dbManager, VideoRecord, FullClipVideoRecord, ShortsVideoRecord } from '../utils/database';
 import AudioStudio from './AudioStudio';
 import ShortsStudio from './ShortsStudio';
@@ -45,504 +45,6 @@ const YouTubeIcon: React.FC<{ className?: string }> = ({ className }) => (
     <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
   </svg>
 );
-
-// FIXED: Enhanced Thumbnail Modal with Avatar Preservation
-const ThumbnailModal: React.FC<{
-  isOpen: boolean;
-  onClose: () => void;
-  video: ShortsVideoRecord;
-  onDownload: (videoWithThumbnail: Blob) => void;
-}> = ({ isOpen, onClose, video, onDownload }) => {
-  const [thumbnailImage, setThumbnailImage] = useState<HTMLImageElement | null>(null);
-  const [thumbnailText, setThumbnailText] = useState('');
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [thumbnailMode, setThumbnailMode] = useState<'upload' | 'text'>('upload');
-  
-  // FIXED: Reset state when modal opens/closes
-  useEffect(() => {
-    if (isOpen) {
-      setThumbnailImage(null);
-      setThumbnailText('');
-      setIsProcessing(false);
-      setThumbnailMode('upload');
-    }
-  }, [isOpen]);
-
-  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file && file.type.startsWith('image/')) {
-      const img = new Image();
-      img.onload = () => {
-        setThumbnailImage(img);
-        console.log('Thumbnail image loaded:', img.width, 'x', img.height);
-      };
-      img.onerror = () => {
-        alert('Failed to load image. Please try another file.');
-      };
-      img.src = URL.createObjectURL(file);
-    } else {
-      alert('Please select a valid image file.');
-    }
-  };
-
-  const generateTextThumbnail = () => {
-    if (!thumbnailText.trim()) {
-      alert('Please enter some text for the thumbnail.');
-      return;
-    }
-
-    const canvas = document.createElement('canvas');
-    canvas.width = 720;
-    canvas.height = 1280;
-    const ctx = canvas.getContext('2d')!;
-
-    // Create gradient background
-    const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-    gradient.addColorStop(0, '#1a1a2e');
-    gradient.addColorStop(0.5, '#16213e');
-    gradient.addColorStop(1, '#0f3460');
-    
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Add decorative elements
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
-    for (let i = 0; i < 20; i++) {
-      const x = Math.random() * canvas.width;
-      const y = Math.random() * canvas.height;
-      const size = Math.random() * 4 + 2;
-      ctx.beginPath();
-      ctx.arc(x, y, size, 0, 2 * Math.PI);
-      ctx.fill();
-    }
-
-    // Add main text
-    ctx.fillStyle = '#FFFFFF';
-    ctx.font = 'bold 48px Arial';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-
-    // Word wrap for long text
-    const words = thumbnailText.split(' ');
-    const lines: string[] = [];
-    let currentLine = '';
-    
-    for (const word of words) {
-      const testLine = currentLine + (currentLine ? ' ' : '') + word;
-      const metrics = ctx.measureText(testLine);
-      
-      if (metrics.width > canvas.width - 80 && currentLine) {
-        lines.push(currentLine);
-        currentLine = word;
-      } else {
-        currentLine = testLine;
-      }
-    }
-    if (currentLine) {
-      lines.push(currentLine);
-    }
-
-    // Draw text lines
-    const lineHeight = 60;
-    const startY = canvas.height / 2 - (lines.length - 1) * lineHeight / 2;
-    
-    lines.forEach((line, index) => {
-      const y = startY + index * lineHeight;
-      
-      // Text shadow
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-      ctx.fillText(line, canvas.width / 2 + 3, y + 3);
-      
-      // Main text
-      ctx.fillStyle = '#FFFFFF';
-      ctx.fillText(line, canvas.width / 2, y);
-    });
-
-    // Add subtitle
-    ctx.font = 'bold 24px Arial';
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-    ctx.fillText('CodeStream', canvas.width / 2, canvas.height - 100);
-
-    // Convert to image
-    const img = new Image();
-    img.onload = () => {
-      setThumbnailImage(img);
-      console.log('Text thumbnail generated');
-    };
-    img.src = canvas.toDataURL();
-  };
-
-  // FIXED: Enhanced video processing with avatar preservation
-  const handleDownloadWithThumbnail = async () => {
-    if (!thumbnailImage) {
-      alert('Please add a thumbnail first');
-      return;
-    }
-
-    setIsProcessing(true);
-    
-    try {
-      console.log('🎬 Starting video processing with thumbnail and avatar preservation...');
-      
-      // Create video element from the Shorts video (which already has avatar + audio + captions)
-      const videoBlob = new Blob([video.video_blob], { type: 'video/mp4' });
-      const videoUrl = URL.createObjectURL(videoBlob);
-      
-      const videoElement = document.createElement('video');
-      videoElement.src = videoUrl;
-      videoElement.crossOrigin = 'anonymous';
-      videoElement.muted = false; // Keep audio
-      
-      // Wait for video to load
-      await new Promise((resolve, reject) => {
-        videoElement.onloadedmetadata = () => {
-          console.log('✅ Shorts video loaded (with avatar + audio):', videoElement.duration, 'seconds');
-          resolve(void 0);
-        };
-        videoElement.onerror = reject;
-        videoElement.load();
-      });
-
-      // Set up canvas for rendering
-      const canvas = document.createElement('canvas');
-      canvas.width = 720;
-      canvas.height = 1280;
-      const ctx = canvas.getContext('2d')!;
-
-      // Set up MediaRecorder to capture both video and audio
-      const canvasStream = canvas.captureStream(30);
-      
-      // CRITICAL: Get audio from the original Shorts video
-      let finalStream: MediaStream;
-      
-      try {
-        // Try to get audio from video element
-        const audioContext = new AudioContext();
-        const audioSource = audioContext.createMediaElementSource(videoElement);
-        const audioDestination = audioContext.createMediaStreamDestination();
-        
-        // Connect audio
-        audioSource.connect(audioDestination);
-        
-        // Combine canvas video with original audio
-        finalStream = new MediaStream([
-          ...canvasStream.getVideoTracks(),
-          ...audioDestination.stream.getAudioTracks()
-        ]);
-        
-        console.log('✅ Audio stream connected from Shorts video');
-      } catch (audioError) {
-        console.warn('⚠️ Audio connection failed, using video stream directly:', audioError);
-        finalStream = canvasStream;
-      }
-
-      // Set up MediaRecorder with high quality settings
-      let mimeType = 'video/mp4';
-      if (MediaRecorder.isTypeSupported('video/mp4;codecs=avc1.42E01E')) {
-        mimeType = 'video/mp4;codecs=avc1.42E01E';
-      }
-
-      const mediaRecorder = new MediaRecorder(finalStream, {
-        mimeType: mimeType,
-        videoBitsPerSecond: 2500000, // High quality
-        audioBitsPerSecond: 128000
-      });
-
-      const chunks: Blob[] = [];
-      
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          chunks.push(event.data);
-        }
-      };
-
-      mediaRecorder.onstop = () => {
-        console.log('🎬 Recording complete, creating final video...');
-        
-        const finalBlob = new Blob(chunks, { type: 'video/mp4' });
-        console.log('✅ Final video created:', finalBlob.size, 'bytes');
-        
-        // Clean up
-        URL.revokeObjectURL(videoUrl);
-        
-        // Trigger download
-        onDownload(finalBlob);
-        
-        setIsProcessing(false);
-        onClose();
-      };
-
-      mediaRecorder.onerror = (event) => {
-        console.error('❌ MediaRecorder error:', event);
-        setIsProcessing(false);
-        alert('Recording failed. Please try again.');
-      };
-
-      // Start recording
-      console.log('🎬 Starting recording with thumbnail + avatar preservation...');
-      mediaRecorder.start(100);
-      
-      // Calculate timing
-      const thumbnailDuration = 1000; // 1 second for thumbnail
-      const videoDuration = videoElement.duration * 1000; // Convert to milliseconds
-      const totalDuration = thumbnailDuration + videoDuration;
-      
-      const startTime = Date.now();
-      
-      // Start video playback (for audio)
-      videoElement.currentTime = 0;
-      await videoElement.play();
-      
-      console.log('🎬 Playback started, beginning render loop...');
-
-      // FIXED: Enhanced render loop that preserves the complete Shorts video (avatar + captions + audio)
-      const renderFrame = () => {
-        const elapsed = Date.now() - startTime;
-        
-        // Check if we've reached the end
-        if (elapsed >= totalDuration) {
-          console.log('🎬 Rendering complete, stopping recording...');
-          mediaRecorder.stop();
-          videoElement.pause();
-          return;
-        }
-
-        // Clear canvas
-        ctx.fillStyle = '#000000';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        if (elapsed < thumbnailDuration) {
-          // PHASE 1: Show thumbnail for first second
-          ctx.drawImage(thumbnailImage, 0, 0, canvas.width, canvas.height);
-          
-          // Add subtle "Loading..." indicator
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-          ctx.fillRect(0, canvas.height - 60, canvas.width, 60);
-          
-          ctx.fillStyle = '#FFFFFF';
-          ctx.font = 'bold 20px Arial';
-          ctx.textAlign = 'center';
-          ctx.fillText('Loading...', canvas.width / 2, canvas.height - 30);
-        } else {
-          // PHASE 2: Show the complete Shorts video (with avatar, captions, and audio)
-          const videoTime = (elapsed - thumbnailDuration) / 1000;
-          videoElement.currentTime = videoTime;
-          
-          // Draw the complete Shorts video frame (this includes the avatar overlay!)
-          if (videoElement.readyState >= 2) {
-            ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
-          }
-          
-          // The Shorts video already contains:
-          // ✅ Original code streaming video
-          // ✅ Avatar overlay (penguin)
-          // ✅ Embedded captions
-          // ✅ Audio narration
-          // So we don't need to redraw the avatar - it's already in the video!
-        }
-
-        requestAnimationFrame(renderFrame);
-      };
-
-      // Start the render loop
-      renderFrame();
-
-    } catch (error) {
-      console.error('❌ Failed to process video with thumbnail:', error);
-      alert(`Failed to process video: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      setIsProcessing(false);
-    }
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black/95 backdrop-blur-sm z-[60] flex items-center justify-center p-6">
-      <div className="bg-black border-2 border-white rounded-xl max-w-2xl w-full relative">
-        {/* Processing Overlay */}
-        {isProcessing && (
-          <div className="absolute inset-0 bg-black/90 backdrop-blur-sm z-10 flex items-center justify-center rounded-xl">
-            <div className="bg-black border-2 border-white rounded-xl p-8 text-center">
-              <div className="flex items-center justify-center gap-3 mb-4">
-                <Loader2 className="w-8 h-8 text-white animate-spin" />
-                <h4 className="text-2xl font-bold text-white">Processing Video</h4>
-              </div>
-              <p className="text-lg text-gray-300 mb-4">
-                Adding thumbnail to your video with avatar preservation...
-              </p>
-              <div className="w-full bg-gray-600 h-2 rounded mb-4">
-                <div className="bg-white h-2 rounded animate-pulse" style={{ width: '100%' }} />
-              </div>
-              <p className="text-sm text-gray-400">
-                This preserves your avatar, audio, and captions
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b-2 border-white">
-          <h3 className="text-2xl font-bold text-white flex items-center gap-3">
-            <ImageIcon className="w-6 h-6" />
-            Add Thumbnail
-          </h3>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-2 hover:bg-white hover:text-black rounded transition-colors border-2 border-white text-white"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <div className="p-6 space-y-6">
-          {/* Mode Selection */}
-          <div className="flex gap-4">
-            <button
-              type="button"
-              onClick={() => setThumbnailMode('upload')}
-              className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-lg font-bold transition-colors border-2 ${
-                thumbnailMode === 'upload'
-                  ? 'bg-white text-black border-white'
-                  : 'bg-black text-white border-gray-600 hover:border-white'
-              }`}
-            >
-              <Upload className="w-5 h-5" />
-              Upload Image
-            </button>
-            <button
-              type="button"
-              onClick={() => setThumbnailMode('text')}
-              className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-lg font-bold transition-colors border-2 ${
-                thumbnailMode === 'text'
-                  ? 'bg-white text-black border-white'
-                  : 'bg-black text-white border-gray-600 hover:border-white'
-              }`}
-            >
-              <Type className="w-5 h-5" />
-              Text Thumbnail
-            </button>
-          </div>
-
-          {/* Upload Mode */}
-          {thumbnailMode === 'upload' && (
-            <div>
-              <label className="block text-white font-bold mb-3">Upload Thumbnail Image</label>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleImageUpload}
-                className="w-full p-3 bg-black border-2 border-white text-white rounded file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:bg-white file:text-black file:font-bold hover:file:bg-gray-200"
-              />
-              <p className="text-gray-400 text-sm mt-2">
-                Upload PNG, JPG, or other image formats (will be resized to 720x1280)
-              </p>
-            </div>
-          )}
-
-          {/* Text Mode */}
-          {thumbnailMode === 'text' && (
-            <div>
-              <label className="block text-white font-bold mb-3">Thumbnail Text</label>
-              <div className="space-y-3">
-                <input
-                  type="text"
-                  value={thumbnailText}
-                  onChange={(e) => setThumbnailText(e.target.value)}
-                  placeholder="Enter text for thumbnail (e.g., 'React Tutorial')"
-                  className="w-full p-3 bg-black border-2 border-white text-white rounded"
-                />
-                <button
-                  type="button"
-                  onClick={generateTextThumbnail}
-                  disabled={!thumbnailText.trim()}
-                  className="w-full bg-white hover:bg-gray-200 disabled:bg-gray-600 text-black px-4 py-3 rounded font-bold transition-colors border-2 border-white"
-                >
-                  Generate Text Thumbnail
-                </button>
-              </div>
-              <p className="text-gray-400 text-sm mt-2">
-                Creates a professional gradient background with your text
-              </p>
-            </div>
-          )}
-
-          {/* Preview */}
-          {thumbnailImage && (
-            <div>
-              <label className="block text-white font-bold mb-3">Thumbnail Preview</label>
-              <div className="bg-black border-2 border-white rounded-lg p-4 text-center">
-                <img
-                  src={thumbnailImage.src}
-                  alt="Thumbnail preview"
-                  className="max-w-full max-h-64 mx-auto rounded"
-                />
-                <p className="text-gray-400 text-sm mt-2">
-                  This will show for 1 second, then your Shorts video (with avatar) will play
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* Avatar Preservation Notice */}
-          <div className="bg-black border-2 border-white rounded-lg p-4">
-            <h4 className="text-white font-bold mb-2 flex items-center gap-2">
-              <Users className="w-5 h-5" />
-              Avatar Preservation
-            </h4>
-            <div className="space-y-2 text-sm text-gray-300">
-              <div className="flex items-center gap-2">
-                <CheckCircle className="w-4 h-4 text-green-400" />
-                <span>✅ Avatar overlay will be preserved</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <CheckCircle className="w-4 h-4 text-green-400" />
-                <span>✅ Audio narration will be maintained</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <CheckCircle className="w-4 h-4 text-green-400" />
-                <span>✅ Embedded captions will remain</span>
-              </div>
-            </div>
-            <p className="text-yellow-400 text-sm mt-2">
-              🎬 Final video: 1s thumbnail + complete Shorts video with avatar
-            </p>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex gap-4">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={isProcessing}
-              className="flex-1 bg-black hover:bg-white hover:text-black text-white px-6 py-3 rounded-lg font-bold transition-colors border-2 border-white disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleDownloadWithThumbnail}
-              disabled={!thumbnailImage || isProcessing}
-              className="flex-1 bg-white hover:bg-gray-200 disabled:bg-gray-600 text-black px-6 py-3 rounded-lg font-bold transition-colors border-2 border-white disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              {isProcessing ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  Processing...
-                </>
-              ) : (
-                <>
-                  <Download className="w-5 h-5" />
-                  Download with Thumbnail
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 // Custom Success Modal Component
 const SuccessModal: React.FC<{
@@ -626,6 +128,288 @@ const SuccessModal: React.FC<{
   );
 };
 
+// FIXED: Thumbnail Modal Component with proper video rendering
+const ThumbnailModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  video: ShortsVideoRecord;
+  onDownloadWithThumbnail: (thumbnailBlob: Blob, thumbnailType: 'image' | 'text', thumbnailData: string) => void;
+}> = ({ isOpen, onClose, video, onDownloadWithThumbnail }) => {
+  const [thumbnailType, setThumbnailType] = useState<'image' | 'text'>('text');
+  const [thumbnailText, setThumbnailText] = useState('');
+  const [thumbnailImage, setThumbnailImage] = useState<File | null>(null);
+  const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file && file.type.startsWith('image/')) {
+      setThumbnailImage(file);
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setThumbnailPreview(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const generateThumbnailBlob = async (): Promise<Blob> => {
+    return new Promise((resolve) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 720;
+      canvas.height = 1280;
+      const ctx = canvas.getContext('2d')!;
+
+      if (thumbnailType === 'text' && thumbnailText.trim()) {
+        // Create text thumbnail
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = 'bold 48px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        
+        // Word wrap for long text
+        const words = thumbnailText.split(' ');
+        const lines: string[] = [];
+        let currentLine = '';
+        
+        for (const word of words) {
+          const testLine = currentLine + (currentLine ? ' ' : '') + word;
+          const metrics = ctx.measureText(testLine);
+          
+          if (metrics.width > canvas.width - 80 && currentLine) {
+            lines.push(currentLine);
+            currentLine = word;
+          } else {
+            currentLine = testLine;
+          }
+        }
+        if (currentLine) lines.push(currentLine);
+        
+        const lineHeight = 60;
+        const startY = canvas.height / 2 - (lines.length - 1) * lineHeight / 2;
+        
+        lines.forEach((line, index) => {
+          ctx.fillText(line, canvas.width / 2, startY + index * lineHeight);
+        });
+        
+        canvas.toBlob(resolve, 'image/png');
+      } else if (thumbnailType === 'image' && thumbnailImage) {
+        // Create image thumbnail
+        const img = new Image();
+        img.onload = () => {
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          canvas.toBlob(resolve, 'image/png');
+        };
+        img.src = thumbnailPreview!;
+      } else {
+        // Fallback: create a simple thumbnail
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = 'bold 36px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('CodeStream', canvas.width / 2, canvas.height / 2);
+        canvas.toBlob(resolve, 'image/png');
+      }
+    });
+  };
+
+  const handleDownload = async () => {
+    if (thumbnailType === 'text' && !thumbnailText.trim()) {
+      alert('Please enter thumbnail text');
+      return;
+    }
+    if (thumbnailType === 'image' && !thumbnailImage) {
+      alert('Please select a thumbnail image');
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      const thumbnailBlob = await generateThumbnailBlob();
+      const thumbnailData = thumbnailType === 'text' ? thumbnailText : (thumbnailPreview || '');
+      
+      await onDownloadWithThumbnail(thumbnailBlob, thumbnailType, thumbnailData);
+    } catch (error) {
+      console.error('Failed to process thumbnail:', error);
+      alert('Failed to process thumbnail');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/95 backdrop-blur-sm z-[60] flex items-center justify-center p-6">
+      <div className="bg-black border-2 border-white rounded-xl p-8 max-w-md w-full">
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-2xl font-bold text-white flex items-center gap-2">
+            <ImageIcon className="w-6 h-6" />
+            Add Thumbnail
+          </h3>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-white hover:text-black rounded transition-colors border-2 border-white text-white"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="space-y-6">
+          {/* Thumbnail Type Selection */}
+          <div>
+            <label className="block text-white font-bold mb-3">Thumbnail Type</label>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setThumbnailType('text')}
+                className={`flex-1 py-3 px-4 rounded-lg font-bold transition-colors border-2 ${
+                  thumbnailType === 'text'
+                    ? 'bg-white text-black border-white'
+                    : 'bg-black text-white border-gray-600 hover:border-white'
+                }`}
+              >
+                Text
+              </button>
+              <button
+                onClick={() => setThumbnailType('image')}
+                className={`flex-1 py-3 px-4 rounded-lg font-bold transition-colors border-2 ${
+                  thumbnailType === 'image'
+                    ? 'bg-white text-black border-white'
+                    : 'bg-black text-white border-gray-600 hover:border-white'
+                }`}
+              >
+                Image
+              </button>
+            </div>
+          </div>
+
+          {/* Text Input */}
+          {thumbnailType === 'text' && (
+            <div>
+              <label className="block text-white font-bold mb-2">Thumbnail Text</label>
+              <textarea
+                value={thumbnailText}
+                onChange={(e) => setThumbnailText(e.target.value)}
+                placeholder="Enter your thumbnail text..."
+                className="w-full h-24 p-3 bg-black border-2 border-white text-white rounded resize-none"
+                maxLength={100}
+              />
+              <p className="text-gray-400 text-sm mt-1">
+                {thumbnailText.length}/100 characters
+              </p>
+            </div>
+          )}
+
+          {/* Image Upload */}
+          {thumbnailType === 'image' && (
+            <div>
+              <label className="block text-white font-bold mb-2">Thumbnail Image</label>
+              <div className="space-y-3">
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-black border-2 border-white text-white hover:bg-white hover:text-black rounded-lg font-bold transition-colors"
+                >
+                  <Upload className="w-5 h-5" />
+                  Choose Image
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  className="hidden"
+                />
+                {thumbnailPreview && (
+                  <div className="border-2 border-white rounded-lg p-2">
+                    <img
+                      src={thumbnailPreview}
+                      alt="Thumbnail preview"
+                      className="w-full h-32 object-cover rounded"
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Preview */}
+          <div>
+            <label className="block text-white font-bold mb-2">Preview</label>
+            <div className="bg-gray-800 border-2 border-white rounded-lg p-4 text-center">
+              {thumbnailType === 'text' && thumbnailText.trim() ? (
+                <div className="text-white font-bold text-lg">
+                  {thumbnailText}
+                </div>
+              ) : thumbnailType === 'image' && thumbnailPreview ? (
+                <img
+                  src={thumbnailPreview}
+                  alt="Preview"
+                  className="w-full h-24 object-cover rounded"
+                />
+              ) : (
+                <div className="text-gray-400 py-8">
+                  {thumbnailType === 'text' ? 'Enter text to see preview' : 'Select image to see preview'}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Avatar Preservation Notice */}
+          <div className="bg-black border-2 border-white rounded-lg p-4">
+            <h4 className="text-white font-bold mb-2 flex items-center gap-2">
+              <Users className="w-5 h-5" />
+              What's Included
+            </h4>
+            <div className="space-y-1 text-sm text-gray-300">
+              <div className="flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-green-400" />
+                <span>✅ 1-second thumbnail intro</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-green-400" />
+                <span>✅ Complete Shorts video with avatar</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-green-400" />
+                <span>✅ Audio narration preserved</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-green-400" />
+                <span>✅ Embedded captions maintained</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Download Button */}
+          <button
+            onClick={handleDownload}
+            disabled={isProcessing || (thumbnailType === 'text' && !thumbnailText.trim()) || (thumbnailType === 'image' && !thumbnailImage)}
+            className="w-full flex items-center justify-center gap-2 py-4 px-6 bg-white hover:bg-gray-200 disabled:bg-gray-600 text-black font-bold rounded-lg transition-colors border-2 border-white"
+          >
+            {isProcessing ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                Processing...
+              </>
+            ) : (
+              <>
+                <Download className="w-5 h-5" />
+                Download with Thumbnail
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const UnifiedGallery: React.FC<UnifiedGalleryProps> = ({
   isOpen,
   onClose,
@@ -663,6 +447,7 @@ const UnifiedGallery: React.FC<UnifiedGalleryProps> = ({
   // FIXED: Thumbnail modal state
   const [isThumbnailModalOpen, setIsThumbnailModalOpen] = useState(false);
   const [videoForThumbnail, setVideoForThumbnail] = useState<ShortsVideoRecord | null>(null);
+  const [isProcessingThumbnail, setIsProcessingThumbnail] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -793,44 +578,175 @@ const UnifiedGallery: React.FC<UnifiedGalleryProps> = ({
     }
   };
 
-  // FIXED: Enhanced thumbnail download with proper filename
-  const handleDownloadVideoWithThumbnail = async (videoWithThumbnail: Blob) => {
+  // FIXED: Completely rewritten thumbnail download function
+  const handleDownloadWithThumbnail = async (video: ShortsVideoRecord, thumbnailBlob: Blob, thumbnailType: 'image' | 'text', thumbnailData: string) => {
+    setIsProcessingThumbnail(true);
+    
     try {
-      if (!videoForThumbnail) return;
+      console.log('🎬 Starting thumbnail video creation...');
       
-      const url = URL.createObjectURL(videoWithThumbnail);
-      const a = document.createElement('a');
-      a.href = url;
+      // Create canvas for final video
+      const canvas = document.createElement('canvas');
+      canvas.width = 720;
+      canvas.height = 1280;
+      const ctx = canvas.getContext('2d')!;
+
+      // Load thumbnail image
+      const thumbnailImage = new Image();
+      await new Promise((resolve, reject) => {
+        thumbnailImage.onload = resolve;
+        thumbnailImage.onerror = reject;
+        thumbnailImage.src = URL.createObjectURL(thumbnailBlob);
+      });
+      console.log('✅ Thumbnail image loaded');
+
+      // Create video element for the Shorts video (which already has avatar, audio, captions)
+      const videoElement = document.createElement('video');
+      videoElement.src = URL.createObjectURL(new Blob([video.video_blob], { type: 'video/mp4' }));
+      videoElement.muted = false; // Keep audio
+      videoElement.crossOrigin = 'anonymous';
       
-      // Create filename with thumbnail suffix
-      const originalName = videoForThumbnail.filename.replace(/\.[^/.]+$/, '');
-      const filename = `${originalName}-with-thumbnail.mp4`;
+      await new Promise((resolve, reject) => {
+        videoElement.onloadedmetadata = resolve;
+        videoElement.onerror = reject;
+        videoElement.load();
+      });
+      console.log('✅ Shorts video loaded with duration:', videoElement.duration);
+
+      // Set up recording
+      const canvasStream = canvas.captureStream(30);
       
-      a.download = filename;
-      a.style.display = 'none';
+      // FIXED: Proper audio handling - get audio from the video element
+      let finalStream: MediaStream;
       
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      try {
+        // Create audio context to capture video audio
+        const audioContext = new AudioContext();
+        const audioSource = audioContext.createMediaElementSource(videoElement);
+        const audioDestination = audioContext.createMediaStreamDestination();
+        
+        // Connect audio
+        audioSource.connect(audioDestination);
+        
+        // Combine canvas video with video audio
+        finalStream = new MediaStream([
+          ...canvasStream.getVideoTracks(),
+          ...audioDestination.stream.getAudioTracks()
+        ]);
+        
+        console.log('✅ Audio stream connected from Shorts video');
+      } catch (audioError) {
+        console.warn('Audio connection failed, using video stream directly:', audioError);
+        finalStream = canvasStream;
+      }
+
+      // Set up MediaRecorder
+      let mimeType = 'video/mp4';
+      if (MediaRecorder.isTypeSupported('video/mp4;codecs=avc1.42E01E')) {
+        mimeType = 'video/mp4;codecs=avc1.42E01E';
+      }
+
+      const mediaRecorder = new MediaRecorder(finalStream, {
+        mimeType: mimeType,
+        videoBitsPerSecond: 2500000,
+        audioBitsPerSecond: 128000
+      });
+
+      const chunks: Blob[] = [];
       
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          chunks.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        console.log('🎬 Recording complete, creating final video...');
+        
+        const finalBlob = new Blob(chunks, { type: 'video/mp4' });
+        
+        // Download the video
+        const url = URL.createObjectURL(finalBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const displayName = getDisplayName(video);
+        a.download = `${displayName}-with-thumbnail-${timestamp}.mp4`;
+        
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+        
+        console.log('✅ Video with thumbnail downloaded successfully');
+        setIsThumbnailModalOpen(false);
+      };
+
+      // Start recording
+      console.log('🎬 Starting recording...');
+      mediaRecorder.start(100);
       
-      console.log('✅ Video with thumbnail downloaded:', filename);
+      // Timing constants
+      const thumbnailDuration = 1000; // 1 second in milliseconds
+      const totalDuration = (thumbnailDuration + videoElement.duration * 1000);
+      
+      const startTime = Date.now();
+      
+      // FIXED: Simplified render loop that properly handles both phases
+      const renderFrame = () => {
+        const elapsed = Date.now() - startTime;
+        
+        // Clear canvas
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        if (elapsed < thumbnailDuration) {
+          // PHASE 1: Show thumbnail for first second
+          ctx.drawImage(thumbnailImage, 0, 0, canvas.width, canvas.height);
+          console.log('📸 Rendering thumbnail phase');
+        } else {
+          // PHASE 2: Show the Shorts video (which already contains avatar, captions, audio)
+          const videoTime = (elapsed - thumbnailDuration) / 1000;
+          
+          // Update video time
+          if (Math.abs(videoElement.currentTime - videoTime) > 0.1) {
+            videoElement.currentTime = videoTime;
+          }
+          
+          // Draw the Shorts video frame (this already includes the avatar!)
+          if (videoElement.readyState >= 2) {
+            ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+          }
+          
+          console.log('🎬 Rendering video phase, time:', videoTime.toFixed(2));
+        }
+        
+        // Check if we're done
+        if (elapsed >= totalDuration) {
+          console.log('🏁 Rendering complete, stopping recording...');
+          mediaRecorder.stop();
+          videoElement.pause();
+          return;
+        }
+        
+        requestAnimationFrame(renderFrame);
+      };
+
+      // Start video playback (for audio)
+      videoElement.currentTime = 0;
+      await videoElement.play();
+      
+      // Start render loop
+      renderFrame();
+      
     } catch (error) {
-      console.error('❌ Failed to download video with thumbnail:', error);
-      setError('Failed to download video with thumbnail');
+      console.error('❌ Failed to create video with thumbnail:', error);
+      alert(`Failed to create video with thumbnail: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsProcessingThumbnail(false);
     }
-  };
-
-  // FIXED: Thumbnail modal handlers
-  const handleOpenThumbnailModal = (video: ShortsVideoRecord) => {
-    setVideoForThumbnail(video);
-    setIsThumbnailModalOpen(true);
-  };
-
-  const handleCloseThumbnailModal = () => {
-    setIsThumbnailModalOpen(false);
-    setVideoForThumbnail(null);
   };
 
   // NEW: Social media sharing functions
@@ -953,6 +869,12 @@ Made with CodeStream: https://codestream.app`;
     setIsShortsStudioOpen(true);
   };
 
+  // FIXED: New thumbnail handler
+  const handleAddThumbnail = (video: ShortsVideoRecord) => {
+    setVideoForThumbnail(video);
+    setIsThumbnailModalOpen(true);
+  };
+
   const handleAudioStudioClose = () => {
     setIsAudioStudioOpen(false);
     setVideoForAudio(null);
@@ -961,6 +883,11 @@ Made with CodeStream: https://codestream.app`;
   const handleShortsStudioClose = () => {
     setIsShortsStudioOpen(false);
     setVideoForShorts(null);
+  };
+
+  const handleThumbnailModalClose = () => {
+    setIsThumbnailModalOpen(false);
+    setVideoForThumbnail(null);
   };
 
   const handleAudioVideoSaved = async () => {
@@ -1110,13 +1037,13 @@ Made with CodeStream: https://codestream.app`;
                   </button>
                 )}
 
-                {/* FIXED: Enhanced Shorts buttons with thumbnail option */}
+                {/* FIXED: Shorts buttons with thumbnail option */}
                 {activeTab === 'shorts' && (
                   <>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleOpenThumbnailModal(video as ShortsVideoRecord);
+                        handleAddThumbnail(video as ShortsVideoRecord);
                       }}
                       disabled={deletingVideoId === video.id}
                       className={`p-2 rounded transition-colors border-2 ${
@@ -1124,7 +1051,7 @@ Made with CodeStream: https://codestream.app`;
                           ? 'border-black text-black hover:bg-black hover:text-white' 
                           : 'border-white text-white hover:bg-white hover:text-black'
                       } disabled:opacity-50 disabled:cursor-not-allowed`}
-                      title="Add Thumbnail (preserves avatar)"
+                      title="Add Thumbnail"
                     >
                       <ImageIcon className="w-5 h-5" />
                     </button>
@@ -1393,10 +1320,10 @@ Made with CodeStream: https://codestream.app`;
               </button>
             )}
             
-            {/* FIXED: Enhanced Shorts player buttons */}
+            {/* FIXED: Shorts buttons with thumbnail option */}
             {activeTab === 'shorts' && (
               <button
-                onClick={() => handleOpenThumbnailModal(selectedVideo as ShortsVideoRecord)}
+                onClick={() => handleAddThumbnail(selectedVideo as ShortsVideoRecord)}
                 className="bg-white hover:bg-gray-200 text-black px-6 py-3 rounded-lg font-bold 
                          transition-colors border-2 border-white flex items-center gap-2"
               >
@@ -1566,6 +1493,14 @@ Made with CodeStream: https://codestream.app`;
             </div>
           )}
 
+          {/* Processing Overlay */}
+          {isProcessingThumbnail && (
+            <div className="mx-6 mt-4 bg-black border-2 border-white rounded-lg p-4 flex items-center gap-3">
+              <Loader2 className="w-6 h-6 text-white animate-spin flex-shrink-0" />
+              <span className="text-white font-medium">Creating video with thumbnail...</span>
+            </div>
+          )}
+
           {/* Deleting Overlay */}
           {deletingVideoId && (
             <div className="mx-6 mt-4 bg-black border-2 border-white rounded-lg p-4 flex items-center gap-3">
@@ -1673,12 +1608,16 @@ Made with CodeStream: https://codestream.app`;
       />
 
       {/* FIXED: Thumbnail Modal */}
-      <ThumbnailModal
-        isOpen={isThumbnailModalOpen}
-        onClose={handleCloseThumbnailModal}
-        video={videoForThumbnail!}
-        onDownload={handleDownloadVideoWithThumbnail}
-      />
+      {videoForThumbnail && (
+        <ThumbnailModal
+          isOpen={isThumbnailModalOpen}
+          onClose={handleThumbnailModalClose}
+          video={videoForThumbnail}
+          onDownloadWithThumbnail={(thumbnailBlob, thumbnailType, thumbnailData) => 
+            handleDownloadWithThumbnail(videoForThumbnail, thumbnailBlob, thumbnailType, thumbnailData)
+          }
+        />
+      )}
 
       {/* Custom Success Modal */}
       <SuccessModal
