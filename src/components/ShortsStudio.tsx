@@ -61,25 +61,25 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
       id: 'classic',
       name: 'Classic Penguin',
       description: 'Traditional black and white penguin',
-      imageUrl: 'https://images.pexels.com/photos/86405/penguin-funny-blue-water-86405.jpeg?auto=compress&cs=tinysrgb&w=200&h=200&fit=crop'
+      imageUrl: 'https://images.pexels.com/photos/54508/emperor-penguins-antarctica-life-in-the-cold-54508.jpeg?auto=compress&cs=tinysrgb&w=200&h=200&fit=crop'
     },
     {
       id: 'cool',
       name: 'Cool Penguin',
       description: 'Penguin with sunglasses',
-      imageUrl: 'https://images.pexels.com/photos/792416/pexels-photo-792416.jpeg?auto=compress&cs=tinysrgb&w=200&h=200&fit=crop'
+      imageUrl: 'https://i.pinimg.com/564x/e7/d7/37/e7d73718c57486e969a5a3a41c554900.jpg'
     },
     {
       id: 'baby',
       name: 'Baby Penguin',
       description: 'Cute baby penguin',
-      imageUrl: 'https://images.pexels.com/photos/1125979/pexels-photo-1125979.jpeg?auto=compress&cs=tinysrgb&w=200&h=200&fit=crop'
+      imageUrl: 'https://images.pexels.com/photos/1059945/pexels-photo-1059945.jpeg?auto=compress&cs=tinysrgb&w=200&h=200&fit=crop'
     },
     {
       id: 'emperor',
       name: 'Emperor Penguin',
       description: 'Majestic emperor penguin',
-      imageUrl: 'https://images.pexels.com/photos/792416/pexels-photo-792416.jpeg?auto=compress&cs=tinysrgb&w=200&h=200&fit=crop'
+      imageUrl: 'https://images.pexels.com/photos/207833/pexels-photo-207833.jpeg?auto=compress&cs=tinysrgb&w=200&h=200&fit=crop'
     }
   ];
 
@@ -111,7 +111,7 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
       console.log('Generating custom penguin avatar with Grok Vision...');
       
       // Enhanced prompt for better penguin generation (removed "transparent background")
-      const enhancedPrompt = `Create a cute, cartoon-style penguin avatar for a coding video. ${customAvatarPrompt}. The penguin should be friendly, professional, and suitable for educational content. Style: clean cartoon illustration, high quality, suitable for video overlay.`;
+      const enhancedPrompt = `Create a 3d 8bit block style cool penguin with glasses as an avatar for a coding video. ${customAvatarPrompt}. The penguin should be friendly, professional, and suitable for educational content. Style: clean cartoon illustration, high quality, suitable for video overlay.`;
 
       const response = await fetch('https://api.x.ai/v1/images/generations', {
         method: 'POST',
