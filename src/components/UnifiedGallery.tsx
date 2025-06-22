@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Play, Download, Trash2, Calendar, Clock, Code, X, Save, AlertCircle, FileAudio, Mic, Loader2, Users, Edit3, Captions, Sparkles, CheckCircle, Share2, ExternalLink } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Play, Download, Trash2, Calendar, Clock, Code, X, Save, AlertCircle, FileAudio, Mic, Loader2, Users, Edit3, Captions, Sparkles, CheckCircle, Share2, ExternalLink, Image as ImageIcon, Plus } from 'lucide-react';
 import { dbManager, VideoRecord, FullClipVideoRecord, ShortsVideoRecord } from '../utils/database';
 import AudioStudio from './AudioStudio';
 import ShortsStudio from './ShortsStudio';
@@ -20,6 +20,277 @@ interface UnifiedGalleryProps {
 }
 
 type GalleryTab = 'videos' | 'fullclip' | 'shorts';
+
+// Thumbnail Modal Component
+const ThumbnailModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  onDownloadWithThumbnail: (thumbnailBlob: Blob | null) => void;
+  videoName: string;
+}> = ({ isOpen, onClose, onDownloadWithThumbnail, videoName }) => {
+  const [thumbnailImage, setThumbnailImage] = useState<string | null>(null);
+  const [thumbnailBlob, setThumbnailBlob] = useState<Blob | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file && file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const imageUrl = e.target?.result as string;
+        setThumbnailImage(imageUrl);
+        setThumbnailBlob(file);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      alert('Please select a valid image file (PNG, JPG, GIF, etc.)');
+    }
+    
+    // Reset input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const generateTextThumbnail = async () => {
+    setIsProcessing(true);
+    try {
+      const canvas = canvasRef.current!;
+      const ctx = canvas.getContext('2d')!;
+      
+      // Set canvas size for vertical video thumbnail
+      canvas.width = 720;
+      canvas.height = 1280;
+      
+      // Create gradient background
+      const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+      gradient.addColorStop(0, '#1a1a2e');
+      gradient.addColorStop(0.5, '#16213e');
+      gradient.addColorStop(1, '#0f0f23');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      // Add subtle pattern
+      ctx.globalAlpha = 0.1;
+      for (let i = 0; i < canvas.width; i += 40) {
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(i, 0);
+        ctx.lineTo(i, canvas.height);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      
+      // Add main title
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 48px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      
+      // Split video name into lines for better display
+      const words = videoName.split(' ');
+      const lines: string[] = [];
+      let currentLine = '';
+      
+      for (const word of words) {
+        const testLine = currentLine + (currentLine ? ' ' : '') + word;
+        const metrics = ctx.measureText(testLine);
+        
+        if (metrics.width > canvas.width - 80 && currentLine) {
+          lines.push(currentLine);
+          currentLine = word;
+        } else {
+          currentLine = testLine;
+        }
+      }
+      if (currentLine) {
+        lines.push(currentLine);
+      }
+      
+      // Draw title lines
+      const startY = canvas.height / 2 - (lines.length * 30);
+      lines.forEach((line, index) => {
+        ctx.fillText(line, canvas.width / 2, startY + (index * 60));
+      });
+      
+      // Add subtitle
+      ctx.font = 'bold 32px Arial';
+      ctx.fillStyle = '#4ECDC4';
+      ctx.fillText('Code Streaming Video', canvas.width / 2, startY + (lines.length * 60) + 80);
+      
+      // Add CodeStream branding
+      ctx.font = 'bold 24px Arial';
+      ctx.fillStyle = '#FF6B9D';
+      ctx.fillText('Created with CodeStream', canvas.width / 2, canvas.height - 100);
+      
+      // Add decorative elements
+      ctx.strokeStyle = '#4ECDC4';
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.rect(40, 40, canvas.width - 80, canvas.height - 80);
+      ctx.stroke();
+      
+      // Convert canvas to blob
+      canvas.toBlob((blob) => {
+        if (blob) {
+          const url = URL.createObjectURL(blob);
+          setThumbnailImage(url);
+          setThumbnailBlob(blob);
+        }
+      }, 'image/png');
+      
+    } catch (error) {
+      console.error('Failed to generate text thumbnail:', error);
+      alert('Failed to generate thumbnail. Please try again.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleDownload = () => {
+    onDownloadWithThumbnail(thumbnailBlob);
+    onClose();
+  };
+
+  const handleSkipThumbnail = () => {
+    onDownloadWithThumbnail(null);
+    onClose();
+  };
+
+  const clearThumbnail = () => {
+    setThumbnailImage(null);
+    setThumbnailBlob(null);
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/95 backdrop-blur-sm z-[60] flex items-center justify-center p-6">
+      <div className="bg-black border-2 border-white rounded-xl max-w-2xl w-full relative">
+        {/* Header */}
+        <div className="flex items-center justify-between p-6 border-b-2 border-white">
+          <h3 className="text-2xl font-bold text-white flex items-center gap-3">
+            <div className="p-2 border-2 border-white rounded-lg">
+              <ImageIcon className="w-6 h-6 text-white" />
+            </div>
+            Add Thumbnail
+          </h3>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-white hover:text-black rounded-lg transition-colors border-2 border-white text-white"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-6">
+          <p className="text-gray-300 text-lg">
+            Add a 1-second thumbnail to the beginning of your video for better social media engagement.
+          </p>
+
+          {/* Thumbnail Options */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Upload Image */}
+            <div className="space-y-3">
+              <h4 className="text-white font-bold text-lg">Upload Image</h4>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="w-full flex items-center justify-center gap-3 py-4 px-6 rounded-lg font-bold 
+                         bg-black border-2 border-white text-white hover:bg-white hover:text-black transition-colors"
+              >
+                <Plus className="w-5 h-5" />
+                Choose Image
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImageUpload}
+                className="hidden"
+              />
+              <p className="text-gray-400 text-sm">
+                Upload PNG, JPG, or other image formats
+              </p>
+            </div>
+
+            {/* Generate Text Thumbnail */}
+            <div className="space-y-3">
+              <h4 className="text-white font-bold text-lg">Auto-Generate</h4>
+              <button
+                onClick={generateTextThumbnail}
+                disabled={isProcessing}
+                className="w-full flex items-center justify-center gap-3 py-4 px-6 rounded-lg font-bold 
+                         bg-white text-black hover:bg-gray-200 disabled:bg-gray-600 disabled:text-gray-300 transition-colors border-2 border-white"
+              >
+                {isProcessing ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <Sparkles className="w-5 h-5" />
+                )}
+                {isProcessing ? 'Generating...' : 'Generate Thumbnail'}
+              </button>
+              <p className="text-gray-400 text-sm">
+                Create a text-based thumbnail with video title
+              </p>
+            </div>
+          </div>
+
+          {/* Thumbnail Preview */}
+          {thumbnailImage && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h4 className="text-white font-bold text-lg">Thumbnail Preview</h4>
+                <button
+                  onClick={clearThumbnail}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="flex justify-center">
+                <img
+                  src={thumbnailImage}
+                  alt="Thumbnail preview"
+                  className="max-w-xs border-2 border-white rounded-lg"
+                  style={{ aspectRatio: '9/16' }}
+                />
+              </div>
+              <p className="text-center text-gray-400 text-sm">
+                This thumbnail will be shown for 1 second at the beginning of your video
+              </p>
+            </div>
+          )}
+
+          {/* Action Buttons */}
+          <div className="flex gap-4 pt-4">
+            <button
+              onClick={handleSkipThumbnail}
+              className="flex-1 bg-black border-2 border-white text-white hover:bg-white hover:text-black 
+                       px-6 py-3 rounded-lg font-bold transition-colors"
+            >
+              Skip Thumbnail
+            </button>
+            <button
+              onClick={handleDownload}
+              disabled={!thumbnailBlob}
+              className="flex-1 bg-white text-black hover:bg-gray-200 disabled:bg-gray-600 disabled:text-gray-300
+                       px-6 py-3 rounded-lg font-bold transition-colors border-2 border-white flex items-center justify-center gap-2"
+            >
+              <Download className="w-5 h-5" />
+              Download with Thumbnail
+            </button>
+          </div>
+        </div>
+
+        {/* Hidden canvas for thumbnail generation */}
+        <canvas ref={canvasRef} className="hidden" />
+      </div>
+    </div>
+  );
+};
 
 // Social Media Icons (using Lucide icons styled to match platforms)
 const XIcon: React.FC<{ className?: string }> = ({ className }) => (
@@ -162,6 +433,11 @@ const UnifiedGallery: React.FC<UnifiedGalleryProps> = ({
     type: 'video' | 'fullclip' | 'shorts';
   }>({ filename: '', type: 'video' });
 
+  // NEW: Thumbnail modal state
+  const [showThumbnailModal, setShowThumbnailModal] = useState(false);
+  const [videoForThumbnail, setVideoForThumbnail] = useState<ShortsVideoRecord | null>(null);
+  const [isProcessingThumbnail, setIsProcessingThumbnail] = useState(false);
+
   useEffect(() => {
     if (isOpen) {
       loadAllData();
@@ -259,7 +535,21 @@ const UnifiedGallery: React.FC<UnifiedGalleryProps> = ({
     }
   };
 
+  // NEW: Enhanced download function with thumbnail support for Shorts
   const handleDownloadVideo = async (video: VideoRecord | FullClipVideoRecord | ShortsVideoRecord) => {
+    // For Shorts videos, show thumbnail modal
+    if (activeTab === 'shorts') {
+      setVideoForThumbnail(video as ShortsVideoRecord);
+      setShowThumbnailModal(true);
+      return;
+    }
+
+    // For other videos, download directly
+    await downloadVideoDirectly(video);
+  };
+
+  // NEW: Direct download function
+  const downloadVideoDirectly = async (video: VideoRecord | FullClipVideoRecord | ShortsVideoRecord) => {
     try {
       const blob = new Blob([video.video_blob], { type: 'video/mp4' });
       
@@ -288,6 +578,156 @@ const UnifiedGallery: React.FC<UnifiedGalleryProps> = ({
     } catch (error) {
       console.error('Failed to download video:', error);
       setError('Failed to download video');
+    }
+  };
+
+  // NEW: Download with thumbnail function
+  const handleDownloadWithThumbnail = async (thumbnailBlob: Blob | null) => {
+    if (!videoForThumbnail) return;
+
+    setIsProcessingThumbnail(true);
+    
+    try {
+      if (!thumbnailBlob) {
+        // No thumbnail, download directly
+        await downloadVideoDirectly(videoForThumbnail);
+        return;
+      }
+
+      console.log('Creating video with thumbnail...');
+      
+      // Create video element for the original video
+      const videoBlob = new Blob([videoForThumbnail.video_blob], { type: 'video/mp4' });
+      const videoUrl = URL.createObjectURL(videoBlob);
+      
+      const video = document.createElement('video');
+      video.src = videoUrl;
+      video.crossOrigin = 'anonymous';
+      
+      // Wait for video to load
+      await new Promise((resolve, reject) => {
+        video.onloadedmetadata = () => {
+          console.log('Video loaded for thumbnail processing:', video.duration, 'seconds');
+          resolve(void 0);
+        };
+        video.onerror = reject;
+        video.load();
+      });
+
+      // Create thumbnail image element
+      const thumbnailImg = new Image();
+      await new Promise((resolve, reject) => {
+        thumbnailImg.onload = resolve;
+        thumbnailImg.onerror = reject;
+        thumbnailImg.src = URL.createObjectURL(thumbnailBlob);
+      });
+
+      // Set up canvas for rendering
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d')!;
+      canvas.width = 720;
+      canvas.height = 1280;
+
+      // Set up MediaRecorder
+      const stream = canvas.captureStream(30);
+      
+      let mimeType = 'video/mp4';
+      if (MediaRecorder.isTypeSupported('video/mp4;codecs=avc1.42E01E')) {
+        mimeType = 'video/mp4;codecs=avc1.42E01E';
+      }
+
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: mimeType,
+        videoBitsPerSecond: 2500000,
+        audioBitsPerSecond: 128000
+      });
+
+      const chunks: Blob[] = [];
+      
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          chunks.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        console.log('Recording with thumbnail complete');
+        
+        const finalBlob = new Blob(chunks, { type: 'video/mp4' });
+        
+        // Download the video with thumbnail
+        const url = URL.createObjectURL(finalBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        
+        let filename = videoForThumbnail.filename;
+        if (!filename.toLowerCase().endsWith('.mp4')) {
+          filename = filename.replace(/\.[^/.]+$/, '') + '.mp4';
+        }
+        // Add thumbnail indicator to filename
+        filename = filename.replace('.mp4', '-with-thumbnail.mp4');
+        
+        a.download = filename;
+        a.style.display = 'none';
+        
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        
+        setTimeout(() => {
+          URL.revokeObjectURL(url);
+          URL.revokeObjectURL(videoUrl);
+          URL.revokeObjectURL(thumbnailImg.src);
+        }, 1000);
+      };
+
+      // Start recording
+      mediaRecorder.start(100);
+      
+      const startTime = Date.now();
+      const thumbnailDuration = 1000; // 1 second
+      const totalDuration = thumbnailDuration + (video.duration * 1000);
+      
+      // Render loop
+      const renderFrame = () => {
+        const elapsed = Date.now() - startTime;
+        
+        // Clear canvas
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        if (elapsed < thumbnailDuration) {
+          // Show thumbnail for first second
+          ctx.drawImage(thumbnailImg, 0, 0, canvas.width, canvas.height);
+        } else {
+          // Show video content
+          const videoTime = (elapsed - thumbnailDuration) / 1000;
+          video.currentTime = videoTime;
+          
+          if (video.readyState >= 2) {
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          }
+        }
+        
+        if (elapsed < totalDuration) {
+          requestAnimationFrame(renderFrame);
+        } else {
+          mediaRecorder.stop();
+        }
+      };
+
+      // Start the render loop
+      renderFrame();
+
+    } catch (error) {
+      console.error('Failed to create video with thumbnail:', error);
+      setError('Failed to create video with thumbnail. Downloading original video instead.');
+      // Fallback to direct download
+      await downloadVideoDirectly(videoForThumbnail);
+    } finally {
+      setIsProcessingThumbnail(false);
+      setShowThumbnailModal(false);
+      setVideoForThumbnail(null);
     }
   };
 
@@ -645,9 +1085,9 @@ Made with CodeStream: https://codestream.app`;
                       ? 'border-black text-black hover:bg-black hover:text-white' 
                       : 'border-white text-white hover:bg-white hover:text-black'
                   } disabled:opacity-50 disabled:cursor-not-allowed`}
-                  title="Download MP4"
+                  title={activeTab === 'shorts' ? "Download MP4 (with thumbnail option)" : "Download MP4"}
                 >
-                  <Download className="w-5 h-5" />
+                  {activeTab === 'shorts' ? <ImageIcon className="w-5 h-5" /> : <Download className="w-5 h-5" />}
                 </button>
                 <button
                   onClick={(e) => {
@@ -700,6 +1140,10 @@ Made with CodeStream: https://codestream.app`;
                     <Share2 className="w-4 h-4" />
                     <span>Social Ready</span>
                   </div>
+                  <div className="flex items-center gap-2">
+                    <ImageIcon className="w-4 h-4" />
+                    <span>Thumbnail Ready</span>
+                  </div>
                 </>
               )}
             </div>
@@ -726,7 +1170,7 @@ Made with CodeStream: https://codestream.app`;
                   Avatar: {(video as ShortsVideoRecord).avatar_type} • Position: {(video as ShortsVideoRecord).avatar_position}
                 </p>
                 <p className="text-green-400 mt-1">
-                  ✨ Ready for X, TikTok, Instagram & YouTube
+                  ✨ Ready for X, TikTok, Instagram & YouTube • 🖼️ Thumbnail Support
                 </p>
               </div>
             )}
@@ -836,13 +1280,14 @@ Made with CodeStream: https://codestream.app`;
               </button>
             )}
             
+            {/* NEW: Enhanced download button for Shorts */}
             <button
               onClick={() => handleDownloadVideo(selectedVideo)}
               className="bg-black hover:bg-white hover:text-black text-white px-6 py-3 rounded-lg font-bold 
                        transition-colors border-2 border-white flex items-center gap-2"
             >
-              <Download className="w-5 h-5" />
-              Download MP4
+              {activeTab === 'shorts' ? <ImageIcon className="w-5 h-5" /> : <Download className="w-5 h-5" />}
+              {activeTab === 'shorts' ? 'Download with Thumbnail' : 'Download MP4'}
             </button>
           </div>
 
@@ -888,7 +1333,7 @@ Made with CodeStream: https://codestream.app`;
                 </button>
               </div>
               <p className="text-gray-400 text-sm mt-3 text-center">
-                🚀 Perfect vertical format for all social platforms
+                🚀 Perfect vertical format for all social platforms • 🖼️ Add thumbnails for better engagement
               </p>
             </div>
           )}
@@ -997,6 +1442,14 @@ Made with CodeStream: https://codestream.app`;
             </div>
           )}
 
+          {/* Processing Overlay for Thumbnail */}
+          {isProcessingThumbnail && (
+            <div className="mx-6 mt-4 bg-black border-2 border-white rounded-lg p-4 flex items-center gap-3">
+              <Loader2 className="w-6 h-6 text-white animate-spin flex-shrink-0" />
+              <span className="text-white font-medium">Creating video with thumbnail...</span>
+            </div>
+          )}
+
           {/* Deleting Overlay */}
           {deletingVideoId && (
             <div className="mx-6 mt-4 bg-black border-2 border-white rounded-lg p-4 flex items-center gap-3">
@@ -1101,6 +1554,17 @@ Made with CodeStream: https://codestream.app`;
         onClose={handleShortsStudioClose}
         selectedVideo={videoForShorts}
         onShortsVideoSaved={handleShortsVideoSaved}
+      />
+
+      {/* NEW: Thumbnail Modal */}
+      <ThumbnailModal
+        isOpen={showThumbnailModal}
+        onClose={() => {
+          setShowThumbnailModal(false);
+          setVideoForThumbnail(null);
+        }}
+        onDownloadWithThumbnail={handleDownloadWithThumbnail}
+        videoName={videoForThumbnail ? getDisplayName(videoForThumbnail) : ''}
       />
 
       {/* Custom Success Modal */}
