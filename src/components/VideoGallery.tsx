@@ -13,6 +13,7 @@ interface VideoGalleryProps {
     originalFilename: string;
     language: string;
     duration: number;
+    content: string;
   } | null;
   onPendingVideoSaved?: () => void;
 }
@@ -100,7 +101,8 @@ const VideoGallery: React.FC<VideoGalleryProps> = ({
         pendingVideo.originalFilename,
         pendingVideo.language,
         pendingVideo.duration,
-        pendingVideo.blob
+        pendingVideo.blob,
+        pendingVideo.content
       );
       
       console.log('Video saved with ID:', videoId);

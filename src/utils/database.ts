@@ -8,6 +8,7 @@ export interface VideoRecord {
   duration: number;
   created_at: string;
   video_blob: Uint8Array;
+  original_file_content: string;
 }
 
 export interface FullClipVideoRecord {
@@ -20,6 +21,7 @@ export interface FullClipVideoRecord {
   video_blob: Uint8Array;
   script: string;
   captions: string; // JSON string of caption segments
+  original_file_content: string;
 }
 
 class DatabaseManager {
@@ -70,6 +72,11 @@ class DatabaseManager {
 
   private createTables() {
     try {
+      // Check if original_file_content column exists in videos table
+      const videosTableInfo = this.db.exec("PRAGMA table_info(videos)");
+      const hasFileContentColumn = videosTableInfo.length > 0 && 
+        videosTableInfo[0].values.some((row: any[]) => row[1] === 'original_file_content');
+
       // Original videos table
       const createVideosTableSQL = `
         CREATE TABLE IF NOT EXISTS videos (
@@ -79,9 +86,26 @@ class DatabaseManager {
           file_language TEXT NOT NULL,
           duration INTEGER NOT NULL,
           created_at TEXT NOT NULL,
-          video_blob BLOB NOT NULL
+          video_blob BLOB NOT NULL,
+          original_file_content TEXT
         );
       `;
+
+      // Add column if it doesn't exist
+      if (!hasFileContentColumn) {
+        try {
+          this.db.run('ALTER TABLE videos ADD COLUMN original_file_content TEXT');
+          console.log('Added original_file_content column to videos table');
+        } catch (error) {
+          // Column might already exist or table doesn't exist yet
+          console.log('Creating videos table with original_file_content column');
+        }
+      }
+
+      // Check if original_file_content column exists in fullclip_videos table
+      const fullclipTableInfo = this.db.exec("PRAGMA table_info(fullclip_videos)");
+      const hasFullclipFileContentColumn = fullclipTableInfo.length > 0 && 
+        fullclipTableInfo[0].values.some((row: any[]) => row[1] === 'original_file_content');
 
       // New FullClip videos table for videos with audio and captions
       const createFullClipVideosTableSQL = `
@@ -94,9 +118,21 @@ class DatabaseManager {
           created_at TEXT NOT NULL,
           video_blob BLOB NOT NULL,
           script TEXT,
-          captions TEXT
+          captions TEXT,
+          original_file_content TEXT
         );
       `;
+
+      // Add column if it doesn't exist
+      if (!hasFullclipFileContentColumn) {
+        try {
+          this.db.run('ALTER TABLE fullclip_videos ADD COLUMN original_file_content TEXT');
+          console.log('Added original_file_content column to fullclip_videos table');
+        } catch (error) {
+          // Column might already exist or table doesn't exist yet
+          console.log('Creating fullclip_videos table with original_file_content column');
+        }
+      }
 
       this.db.run(createVideosTableSQL);
       this.db.run(createFullClipVideosTableSQL);
@@ -173,7 +209,8 @@ class DatabaseManager {
     originalFilename: string,
     language: string,
     duration: number,
-    videoBlob: Blob
+    videoBlob: Blob,
+    originalFileContent: string = ''
   ): Promise<number> {
     try {
       await this.initialize();
@@ -186,11 +223,11 @@ class DatabaseManager {
       console.log('Video blob converted to Uint8Array, size:', uint8Array.length);
 
       const stmt = this.db.prepare(`
-        INSERT INTO videos (filename, original_filename, file_language, duration, created_at, video_blob)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO videos (filename, original_filename, file_language, duration, created_at, video_blob, original_file_content)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
       `);
 
-      stmt.run([filename, originalFilename, language, duration, createdAt, uint8Array]);
+      stmt.run([filename, originalFilename, language, duration, createdAt, uint8Array, originalFileContent]);
       
       // Get the inserted ID
       const result = this.db.exec("SELECT last_insert_rowid()");
@@ -213,7 +250,7 @@ class DatabaseManager {
       console.log('Loading all videos...');
 
       const result = this.db.exec(`
-        SELECT id, filename, original_filename, file_language, duration, created_at, video_blob
+        SELECT id, filename, original_filename, file_language, duration, created_at, video_blob, original_file_content
         FROM videos
         ORDER BY created_at DESC
       `);
@@ -235,7 +272,8 @@ class DatabaseManager {
           file_language: row[3] as string,
           duration: row[4] as number,
           created_at: row[5] as string,
-          video_blob: row[6] as Uint8Array
+          video_blob: row[6] as Uint8Array,
+          original_file_content: (row[7] as string) || ''
         };
         videos.push(video);
       }
@@ -253,7 +291,7 @@ class DatabaseManager {
       await this.initialize();
 
       const result = this.db.exec(`
-        SELECT id, filename, original_filename, file_language, duration, created_at, video_blob
+        SELECT id, filename, original_filename, file_language, duration, created_at, video_blob, original_file_content
         FROM videos
         WHERE id = ?
       `, [id]);
@@ -270,7 +308,8 @@ class DatabaseManager {
         file_language: row[3] as string,
         duration: row[4] as number,
         created_at: row[5] as string,
-        video_blob: row[6] as Uint8Array
+        video_blob: row[6] as Uint8Array,
+        original_file_content: (row[7] as string) || ''
       };
 
       return video;
@@ -306,7 +345,8 @@ class DatabaseManager {
     duration: number,
     videoBlob: Blob,
     script: string,
-    captions: any[]
+    captions: any[],
+    originalFileContent: string = ''
   ): Promise<number> {
     try {
       await this.initialize();
@@ -320,11 +360,11 @@ class DatabaseManager {
       console.log('FullClip video blob converted to Uint8Array, size:', uint8Array.length);
 
       const stmt = this.db.prepare(`
-        INSERT INTO fullclip_videos (filename, original_filename, file_language, duration, created_at, video_blob, script, captions)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO fullclip_videos (filename, original_filename, file_language, duration, created_at, video_blob, script, captions, original_file_content)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
-      stmt.run([filename, originalFilename, language, duration, createdAt, uint8Array, script, captionsJson]);
+      stmt.run([filename, originalFilename, language, duration, createdAt, uint8Array, script, captionsJson, originalFileContent]);
       
       // Get the inserted ID
       const result = this.db.exec("SELECT last_insert_rowid()");
@@ -347,7 +387,7 @@ class DatabaseManager {
       console.log('Loading all FullClip videos...');
 
       const result = this.db.exec(`
-        SELECT id, filename, original_filename, file_language, duration, created_at, video_blob, script, captions
+        SELECT id, filename, original_filename, file_language, duration, created_at, video_blob, script, captions, original_file_content
         FROM fullclip_videos
         ORDER BY created_at DESC
       `);
@@ -370,7 +410,8 @@ class DatabaseManager {
           created_at: row[5] as string,
           video_blob: row[6] as Uint8Array,
           script: row[7] as string,
-          captions: row[8] as string
+          captions: row[8] as string,
+          original_file_content: (row[9] as string) || ''
         };
         videos.push(video);
       }
@@ -388,7 +429,7 @@ class DatabaseManager {
       await this.initialize();
 
       const result = this.db.exec(`
-        SELECT id, filename, original_filename, file_language, duration, created_at, video_blob, script, captions
+        SELECT id, filename, original_filename, file_language, duration, created_at, video_blob, script, captions, original_file_content
         FROM fullclip_videos
         WHERE id = ?
       `, [id]);
@@ -407,7 +448,8 @@ class DatabaseManager {
         created_at: row[5] as string,
         video_blob: row[6] as Uint8Array,
         script: row[7] as string,
-        captions: row[8] as string
+        captions: row[8] as string,
+        original_file_content: (row[9] as string) || ''
       };
 
       return video;

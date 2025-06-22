@@ -42,6 +42,7 @@ function App() {
     originalFilename: string;
     language: string;
     duration: number;
+    content: string;
   } | null>(null);
   const videoRef = useRef<HTMLDivElement>(null);
   const codeStreamerRef = useRef<any>(null);
@@ -86,7 +87,8 @@ function App() {
       filename: fileName,
       originalFilename: selectedFile.name,
       language: selectedFile.language,
-      duration
+      duration,
+      content: selectedFile.content
     });
 
     // Auto-open gallery to show the new recording

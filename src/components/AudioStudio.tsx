@@ -62,9 +62,6 @@ const AudioStudio: React.FC<AudioStudioProps> = ({
   const [isProcessingVideo, setIsProcessingVideo] = useState(false);
   const [processingProgress, setProcessingProgress] = useState('');
   
-  // File content for AI analysis
-  const [originalFileContent, setOriginalFileContent] = useState<string>('');
-  
   // Simplified caption controls
   const [captionsEnabled, setCaptionsEnabled] = useState(true);
   const [captionTextColor, setCaptionTextColor] = useState('#FFFFFF');
@@ -106,13 +103,6 @@ const AudioStudio: React.FC<AudioStudioProps> = ({
       loadVoices();
     }
   }, [elevenLabsApiKey]);
-
-  // Extract file content from video when selected
-  useEffect(() => {
-    if (selectedVideo) {
-      extractFileContentFromVideo();
-    }
-  }, [selectedVideo]);
 
   // Audio time tracking
   useEffect(() => {
@@ -165,143 +155,6 @@ const AudioStudio: React.FC<AudioStudioProps> = ({
     }
   };
 
-  // NEW: Extract the original file content by analyzing the video
-  const extractFileContentFromVideo = async () => {
-    if (!selectedVideo) return;
-
-    try {
-      setProcessingProgress('Analyzing video content...');
-      
-      // Create a sample file content based on the video metadata
-      // In a real implementation, you might store the original file content
-      // For now, we'll create a representative sample based on the language and filename
-      const language = selectedVideo.file_language;
-      const filename = selectedVideo.original_filename;
-      
-      let sampleContent = '';
-      
-      // Generate language-specific sample content
-      switch (language.toLowerCase()) {
-        case 'javascript':
-        case 'typescript':
-          sampleContent = `// ${filename}
-function calculateTotal(items) {
-  return items.reduce((sum, item) => sum + item.price, 0);
-}
-
-const userCart = [
-  { name: 'Laptop', price: 999 },
-  { name: 'Mouse', price: 25 },
-  { name: 'Keyboard', price: 75 }
-];
-
-const total = calculateTotal(userCart);
-console.log(\`Total: $\${total}\`);
-
-export { calculateTotal };`;
-          break;
-          
-        case 'python':
-          sampleContent = `# ${filename}
-def calculate_total(items):
-    """Calculate the total price of items in a cart"""
-    return sum(item['price'] for item in items)
-
-user_cart = [
-    {'name': 'Laptop', 'price': 999},
-    {'name': 'Mouse', 'price': 25},
-    {'name': 'Keyboard', 'price': 75}
-]
-
-total = calculate_total(user_cart)
-print(f"Total: ${total}")
-
-if __name__ == "__main__":
-    main()`;
-          break;
-          
-        case 'java':
-          sampleContent = `// ${filename}
-public class ShoppingCart {
-    private List<Item> items;
-    
-    public ShoppingCart() {
-        this.items = new ArrayList<>();
-    }
-    
-    public double calculateTotal() {
-        return items.stream()
-                   .mapToDouble(Item::getPrice)
-                   .sum();
-    }
-    
-    public void addItem(Item item) {
-        items.add(item);
-    }
-    
-    public static void main(String[] args) {
-        ShoppingCart cart = new ShoppingCart();
-        cart.addItem(new Item("Laptop", 999.0));
-        System.out.println("Total: $" + cart.calculateTotal());
-    }
-}`;
-          break;
-          
-        case 'react':
-        case 'jsx':
-          sampleContent = `// ${filename}
-import React, { useState, useEffect } from 'react';
-
-const ShoppingCart = () => {
-  const [items, setItems] = useState([]);
-  const [total, setTotal] = useState(0);
-
-  useEffect(() => {
-    const newTotal = items.reduce((sum, item) => sum + item.price, 0);
-    setTotal(newTotal);
-  }, [items]);
-
-  const addItem = (item) => {
-    setItems(prev => [...prev, item]);
-  };
-
-  return (
-    <div className="shopping-cart">
-      <h2>Shopping Cart</h2>
-      <div className="total">Total: $\{total}</div>
-      <button onClick={() => addItem({name: 'New Item', price: 50})}>
-        Add Item
-      </button>
-    </div>
-  );
-};
-
-export default ShoppingCart;`;
-          break;
-          
-        default:
-          sampleContent = `// ${filename}
-// This is a ${language} file demonstrating key concepts
-// The video shows streaming animation of this code
-// Duration: ${selectedVideo.duration} seconds
-
-function main() {
-    console.log("Hello from ${filename}");
-    return 0;
-}`;
-      }
-      
-      setOriginalFileContent(sampleContent);
-      console.log('File content extracted for AI analysis:', sampleContent.substring(0, 200) + '...');
-      
-    } catch (error) {
-      console.error('Failed to extract file content:', error);
-      setOriginalFileContent(`// ${selectedVideo.original_filename}\n// ${selectedVideo.file_language} code file`);
-    } finally {
-      setProcessingProgress('');
-    }
-  };
-
   const generateAIScript = async () => {
     if (!selectedVideo || !xaiApiKey) {
       alert('Please provide XAI API key and select a video first.');
@@ -312,11 +165,16 @@ function main() {
     setProcessingProgress('Analyzing file content...');
     
     try {
-      console.log('Generating AI script with Grok using file content...');
+      console.log('Generating AI script with Grok using actual file content...');
       
       const language = selectedVideo.file_language;
       const filename = selectedVideo.original_filename;
       const duration = selectedVideo.duration;
+      const originalFileContent = selectedVideo.original_file_content;
+
+      if (!originalFileContent) {
+        throw new Error('No file content available for this video. Please re-record with a newer version.');
+      }
 
       setProcessingProgress('Generating script with AI...');
 
@@ -346,6 +204,7 @@ ${originalFileContent}
 - End with a key insight about this specific implementation
 - Keep it suitable for social media (TikTok, Instagram, YouTube Shorts)
 - Be specific about the code shown - mention actual function names, variables, or patterns you see
+- CRITICAL: Keep the script concise to fit exactly ${duration} seconds when read at normal speaking pace
 
 Create ONLY the natural script text that directly describes and explains the code content shown above. Write it as you would speak it naturally, focusing on what developers would actually see streaming in this ${filename} file.`;
 
@@ -367,7 +226,7 @@ Create ONLY the natural script text that directly describes and explains the cod
               content: userPrompt
             }
           ],
-          max_tokens: 1000,
+          max_tokens: Math.min(1000, Math.max(200, duration * 8)), // Adjust max tokens based on duration
           temperature: 0.7
         })
       });
@@ -384,7 +243,7 @@ Create ONLY the natural script text that directly describes and explains the cod
         throw new Error('No script generated from XAI API');
       }
 
-      console.log('AI script generated successfully based on file content');
+      console.log('AI script generated successfully based on actual file content');
       setScript(generatedScript.trim());
 
     } catch (error) {
@@ -644,7 +503,8 @@ Create ONLY the natural script text that directly describes and explains the cod
             Math.round(finalDuration),
             finalBlob,
             script,
-            captions
+            captions,
+            selectedVideo.original_file_content
           );
 
           console.log('FullClip video saved successfully with ID:', videoId);
@@ -921,17 +781,17 @@ Create ONLY the natural script text that directly describes and explains the cod
               </div>
 
               {/* File Content Preview */}
-              {originalFileContent && (
+              {selectedVideo?.original_file_content && (
                 <div>
                   <label className="block text-white font-bold mb-2">File Content Analysis</label>
                   <div className="bg-black border-2 border-white rounded p-3 max-h-32 overflow-y-auto">
                     <pre className="text-gray-300 text-xs font-mono whitespace-pre-wrap">
-                      {originalFileContent.substring(0, 300)}
-                      {originalFileContent.length > 300 && '...'}
+                      {selectedVideo.original_file_content.substring(0, 300)}
+                      {selectedVideo.original_file_content.length > 300 && '...'}
                     </pre>
                   </div>
                   <p className="text-gray-400 text-sm mt-2">
-                    AI will analyze this code to create a relevant script
+                    AI will analyze this actual code to create a relevant script
                   </p>
                 </div>
               )}
@@ -942,7 +802,7 @@ Create ONLY the natural script text that directly describes and explains the cod
                   <label className="text-white font-bold">Script</label>
                   <button
                     onClick={generateAIScript}
-                    disabled={isGeneratingScript || !selectedVideo || !xaiApiKey}
+                    disabled={isGeneratingScript || !selectedVideo || !xaiApiKey || !selectedVideo?.original_file_content}
                     className="flex items-center gap-2 bg-white hover:bg-gray-200 disabled:bg-gray-600 
                              text-black px-3 py-1 rounded font-bold transition-colors text-sm border-2 border-white"
                   >
@@ -1107,7 +967,7 @@ Create ONLY the natural script text that directly describes and explains the cod
               )}
 
               {/* AI Script Info */}
-              {script && xaiApiKey && originalFileContent && (
+              {script && xaiApiKey && selectedVideo?.original_file_content && (
                 <div className="mb-6 bg-black border-2 border-white rounded-lg p-4">
                   <h4 className="text-white font-bold mb-2 flex items-center gap-2">
                     <Wand2 className="w-4 h-4" />
