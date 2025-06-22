@@ -1,91 +1,93 @@
 # CodeStream
 
-**Create stunning vertical videos with streaming code animations, AI-generated narration, and professional captions**
+**Create stunning vertical videos with streaming code animations, AI-generated narration, professional captions, and custom avatars**
 
 ![Screenshot 2025-06-21 at 4 34 49 PM](https://github.com/user-attachments/assets/c330bf41-0b7b-4a9e-9cf7-c6f3542f1670)
-![Screenshot 2025-06-22 at 3 57 00 PM](https://github.com/user-attachments/assets/d063c409-2bc3-4819-94a9-ff8e3ba2cccb)
-
+![Screenshot 2025-06-22 at 3 57 00 PM](https://github.com/user-attachments/assets/d063c409-2bc3-4819-94a9-ff8e3ba2cccb)
 
 ## 🚀 What's New in CodeStream 2.0
 
-### 🎬 **FullClip Studio** - Complete Video Production Suite
-- **AI Script Generation**: Powered by XAI's Grok model to analyze your actual code and create contextual narration
-- **Professional Audio**: ElevenLabs integration for high-quality voice synthesis
-- **Smart Captions**: Automatically generated and embedded captions with customizable styling
-- **File Content Analysis**: AI reads your actual code to create relevant, specific commentary
-- **One-Click Production**: Seamlessly combines video, audio, and captions into professional MP4s
+### 🎬 **Unified FullClip Studio** - Complete Video Production Suite
+- **🎯 All-in-One Interface**: Create complete social media videos in a single, streamlined workflow
+- **🤖 AI Script Generation**: Powered by XAI's Grok model to analyze your actual code and create contextual narration
+- **🎵 Professional Audio**: ElevenLabs integration for high-quality voice synthesis with multiple voice options
+- **📝 Smart Captions**: Automatically generated and embedded captions with customizable styling
+- **🐧 Avatar Integration**: Upload custom images, generate AI avatars, or choose from preset penguin avatars
+- **📱 Social Media Ready**: Perfect vertical format (9:16) optimized for TikTok, Instagram, YouTube Shorts, and X
 
 ### 🎨 **Advanced Customization**
-- **Color Themes**: Multiple preset themes (Cyberpunk, Ocean, Sunset, Forest) plus full custom color control
-- **Syntax Highlighting**: Beautiful, customizable syntax highlighting for 15+ programming languages
-- **Professional UI**: Apple-level design aesthetics with smooth animations and micro-interactions
+- **🎨 Color Themes**: Multiple preset themes (Cyberpunk, Ocean, Sunset, Forest) plus full custom color control
+- **⚡ Ultra-Fast Streaming**: Revolutionary speed controls from detailed tutorials to ludicrous speed (entire files in seconds)
+- **🎯 Syntax Highlighting**: Beautiful, customizable syntax highlighting for 15+ programming languages
+- **💎 Apple-Level Design**: Professional UI with smooth animations and micro-interactions
 
 ### 💾 **Dual Gallery System**
-- **Video Gallery**: Store and manage your basic code streaming videos
-- **FullClip Gallery**: Complete videos with synchronized audio and embedded captions
-- **Local Storage**: Everything saved locally using IndexedDB with SQL.js for reliability
+- **📹 Video Gallery**: Basic code streaming videos - perfect starting point for content creation
+- **🎬 FullClip Gallery**: Complete social media videos with audio, captions, and avatars
+- **💾 Local Storage**: Everything saved locally using IndexedDB with SQL.js for reliability and privacy
+- **🔄 Seamless Workflow**: Videos → FullClip Studio → Complete Social Media Content
 
 ## Inspiration
 
 The inspiration for CodeStream came from the growing popularity of vertical video content on platforms like TikTok, Instagram Reels, and YouTube Shorts. As developers, we often want to share our code in an engaging, visual way that captures attention in today's short-form content landscape. Traditional screen recordings of code are often boring, hard to follow, and don't translate well to mobile-first vertical formats.
 
-We envisioned a tool that could transform any piece of code into a captivating, cinema-quality vertical video with smooth streaming animations, AI-generated narration, and professional captions - perfect for social media, educational content, and developer portfolios.
+We envisioned a tool that could transform any piece of code into a captivating, cinema-quality vertical video with smooth streaming animations, AI-generated narration, professional captions, and custom avatars - perfect for social media, educational content, and developer portfolios.
 
 ## What it does
 
-CodeStream is a comprehensive web application that transforms static code files into dynamic, vertical video content with professional audio narration. Here's what it offers:
+CodeStream is a comprehensive web application that transforms static code files into dynamic, vertical video content with professional audio narration, captions, and custom avatars. Here's what it offers:
 
 ### 🎯 Core Features
 
-#### **File Upload & Management**
+#### **📁 File Upload & Management**
 - Upload multiple code files in 15+ programming languages
 - Smart language detection and syntax highlighting
 - Organized file management with preview capabilities
+- Drag-and-drop interface for easy file handling
 
-#### **Real-time Code Streaming**
-- Watch your code appear character by character with customizable speed
+#### **⚡ Real-time Code Streaming**
+- Watch your code appear character by character with ultra-fast customizable speed
+- Revolutionary speed controls: from detailed tutorials to ludicrous speed (entire files in seconds)
 - Beautiful syntax highlighting with custom color schemes
 - Smooth cursor animations and auto-scrolling
 - Pause/resume functionality with proper state management
 
-#### **AI-Powered Script Generation**
-- **File Content Analysis**: AI analyzes your actual code content
-- **Contextual Scripts**: Generated narration specifically describes your code
-- **Perfect Timing**: Scripts automatically matched to video duration
-- **XAI Grok Integration**: Powered by cutting-edge AI for natural, engaging commentary
+#### **🎬 Unified FullClip Studio**
+- **🤖 AI-Powered Script Generation**: Analyzes your actual code content to create relevant, contextual narration
+- **🎵 Professional Audio Production**: ElevenLabs integration with multiple voice options and real-time preview
+- **📝 Smart Caption System**: Automatic generation with customizable styling and perfect synchronization
+- **🐧 Avatar Management**: Upload custom images, generate AI avatars with XAI, or choose preset penguin avatars
+- **⚙️ Collapsible Settings**: Clean, organized interface with API settings tucked away when not needed
+- **🎯 Streamlined Workflow**: Logical progression from script to audio to avatar to final video
 
-#### **Professional Audio Production**
-- **ElevenLabs Integration**: High-quality voice synthesis with multiple voice options
-- **Real-time Preview**: Play and preview generated audio before final production
-- **Audio Controls**: Full playback controls with progress tracking
-
-#### **Smart Caption System**
-- **Automatic Generation**: Captions created from AI-generated scripts
-- **Customizable Styling**: Full control over text color, background, and positioning
-- **Embedded Captions**: Captions burned into video for maximum compatibility
-- **Timeline Sync**: Perfect synchronization with audio narration
-
-#### **High-Quality Video Recording**
+#### **🎥 High-Quality Video Recording**
 - Record streaming animations as MP4 videos optimized for vertical viewing (9:16 aspect ratio)
 - Professional 720p resolution at 30fps
 - H.264 codec for maximum compatibility (QuickTime, social media, all players)
 - Real-time recording with progress indicators
 
-#### **Dual Gallery System**
-- **Video Gallery**: Basic code streaming videos with download and management
-- **FullClip Gallery**: Complete videos with audio and captions
-- **Local Storage**: All videos saved locally using IndexedDB with SQL.js
-- **Easy Management**: Preview, download, delete, and organize all your content
+#### **📱 Social Media Integration**
+- **🚀 Direct Sharing**: Built-in sharing for X (Twitter), TikTok, Instagram, and YouTube
+- **📋 Smart Copy**: Automatic caption generation for each platform
+- **🎯 Optimized Format**: Perfect 9:16 vertical format for all social platforms
+- **💎 Professional Quality**: Broadcast-ready videos suitable for any platform
 
 ### 🎨 Advanced Customization
 
-#### **Color Customization**
-- **Preset Themes**: Cyberpunk, Ocean, Sunset, Forest themes
-- **Custom Colors**: Full control over syntax highlighting colors
-- **Live Preview**: See changes in real-time
-- **Professional Palettes**: Carefully designed color schemes for maximum readability
+#### **🌈 Color Customization**
+- **🎨 Preset Themes**: Cyberpunk, Ocean, Sunset, Forest themes with professional color palettes
+- **🎯 Custom Colors**: Full control over syntax highlighting, background, cursor, and line numbers
+- **👁️ Live Preview**: See changes in real-time with interactive preview
+- **💾 Persistent Settings**: Color schemes saved across sessions
 
-#### **Multi-language Support**
+#### **🐧 Avatar System**
+- **📤 Upload Support**: Use your own images (PNG, JPG, GIF, etc.)
+- **🤖 AI Generation**: Create custom penguin avatars with XAI's image generation
+- **🎨 Preset Collection**: Professional penguin avatars (Classic, Cool, Smart, Tech)
+- **📍 Flexible Positioning**: Place avatars in any corner with customizable size
+- **💾 Persistent Storage**: All avatars saved permanently in local database
+
+#### **🌍 Multi-language Support**
 Supports JavaScript, TypeScript, Python, Java, C++, HTML, CSS, React, and many more with language-specific syntax highlighting and AI analysis.
 
 ## How we built it
@@ -94,152 +96,149 @@ Supports JavaScript, TypeScript, Python, Java, C++, HTML, CSS, React, and many m
 - **Frontend**: React 18 with TypeScript for type safety and modern development
 - **Styling**: Tailwind CSS for rapid, responsive design with custom color system
 - **Icons**: Lucide React for consistent, beautiful iconography
-- **Database**: SQL.js with IndexedDB for client-side video storage and management
+- **Database**: SQL.js with IndexedDB for client-side video and avatar storage
 - **Video Recording**: Canvas API with MediaRecorder for high-quality MP4 generation
-- **AI Integration**: XAI Grok API for intelligent script generation
+- **AI Integration**: XAI Grok API for intelligent script generation and image creation
 - **Audio Synthesis**: ElevenLabs API for professional voice generation
 - **Build Tool**: Vite for fast development and optimized production builds
 - **Development Platform**: Built with [Bolt](https://bolt.new) for rapid prototyping and deployment
 
 ### Architecture Decisions
 
-#### **1. Component-Based Design**
-Modular React components for maintainability and scalability:
-- `FileManager`: Handles file uploads and selection with drag-and-drop
-- `CodeStreamer`: Core streaming animation and recording with canvas rendering
-- `ControlPanel`: Playback controls, speed adjustment, and file information
-- `VideoGallery`: Basic video management and playback
-- `AudioStudio`: Complete AI script generation and audio production suite
-- `FullClipGallery`: Professional video gallery with audio and captions
-- `ColorCustomizer`: Advanced color theme management
+#### **🎯 Unified Studio Approach**
+- **📱 Single Interface**: All video creation features in one streamlined FullClip Studio
+- **🔄 Logical Workflow**: API Settings → Voice → Script → Audio → Avatar → Captions → Create
+- **⚙️ Collapsible Design**: Clean interface with advanced settings hidden by default
+- **🎨 Intuitive Layout**: Left sidebar for controls, right sidebar for video preview
 
-#### **2. Canvas-Based Rendering**
+#### **🎨 Canvas-Based Rendering**
 Used HTML5 Canvas for precise control over video output:
 - Ensures consistent 720x1280 resolution for vertical videos
-- Enables custom styling, animations, and caption overlay
+- Enables custom styling, animations, and avatar overlay
 - Provides smooth 30fps recording with professional quality
 - Real-time rendering with syntax highlighting and cursor animations
 
-#### **3. AI-Powered Content Generation**
-- **File Analysis**: Extracts and analyzes actual code content
-- **Contextual Scripts**: AI generates narration specific to the uploaded code
-- **Natural Language**: Creates conversational, educational commentary
-- **Duration Matching**: Scripts automatically timed to video length
+#### **🤖 AI-Powered Content Generation**
+- **📄 File Analysis**: Extracts and analyzes actual code content
+- **🎯 Contextual Scripts**: AI generates narration specific to the uploaded code
+- **💬 Natural Language**: Creates conversational, educational commentary
+- **⏱️ Duration Matching**: Scripts automatically timed to video length
 
-#### **4. Professional Audio Pipeline**
-- **Voice Selection**: Multiple professional voices from ElevenLabs
-- **Real-time Preview**: Audio playback with progress tracking
-- **Quality Control**: High-bitrate audio generation for professional results
+#### **🎵 Professional Audio Pipeline**
+- **🎤 Voice Selection**: Multiple professional voices from ElevenLabs
+- **▶️ Real-time Preview**: Audio playback with progress tracking
+- **🎛️ Quality Control**: High-bitrate audio generation for professional results
 
-#### **5. Client-Side Storage**
+#### **💾 Client-Side Storage**
 Implemented robust local database using SQL.js + IndexedDB:
 - No server required - everything runs in the browser
 - Persistent storage across sessions with automatic backup
-- Efficient binary blob handling for large video files
-- Dual table structure for basic videos and FullClip videos
+- Efficient binary blob handling for large video files and avatar images
+- Dual table structure for basic videos and complete FullClip videos
 
-#### **6. Real-Time Animation System**
-- Character-by-character streaming with configurable timing
+#### **⚡ Ultra-Fast Animation System**
+- Character-by-character streaming with revolutionary speed controls
+- Ludicrous speed mode: entire files rendered in seconds
 - Smooth cursor animations with glow effects
 - Auto-scrolling for long files with proper viewport management
 - Pause/resume state management with visual indicators
 
 ## Challenges we ran into
 
-### 1. AI Script Generation Quality
+### 1. Unified Workflow Design
+**Challenge**: Creating a single interface that handles the entire video production pipeline without overwhelming users.
+**Solution**: Implemented collapsible API settings, logical workflow progression, and clean separation between controls and preview.
+
+### 2. AI Script Generation Quality
 **Challenge**: Creating AI scripts that actually describe the specific code being shown, not generic programming concepts.
 **Solution**: Implemented file content analysis that feeds actual code to the AI, enabling contextual, specific commentary about the exact functions, variables, and patterns in the user's code.
 
-### 2. Video-Audio Synchronization
-**Challenge**: Perfectly synchronizing AI-generated audio with code streaming animations and caption timing.
-**Solution**: Developed a comprehensive timing system that matches script duration to video length, with automatic caption segmentation and frame-perfect synchronization.
+### 3. Avatar Management & Persistence
+**Challenge**: Storing user-uploaded and AI-generated avatars permanently across sessions.
+**Solution**: Extended the database schema to include avatar storage with proper MIME type handling and persistent URLs.
 
-### 3. Cross-Platform Video Compatibility
+### 4. Cross-Platform Video Compatibility
 **Challenge**: Ensuring videos work across all platforms, especially QuickTime Player which had compatibility issues.
 **Solution**: Implemented H.264 baseline profile encoding with proper MP4 container format, ensuring maximum compatibility across all players and platforms.
 
-### 4. Real-Time Canvas Performance
-**Challenge**: Maintaining smooth 30fps recording while rendering complex syntax highlighting and animations.
+### 5. Real-Time Canvas Performance
+**Challenge**: Maintaining smooth 30fps recording while rendering complex syntax highlighting, avatars, and animations.
 **Solution**: Optimized rendering pipeline with efficient canvas operations, requestAnimationFrame timing, and smart redraw strategies.
 
-### 5. Large File Storage Management
-**Challenge**: Managing large video files with audio in browser storage without hitting quotas.
-**Solution**: Migrated to IndexedDB with SQL.js for efficient binary data storage, proper cleanup, and quota management.
-
-### 6. AI Integration Complexity
-**Challenge**: Integrating multiple AI services (XAI for scripts, ElevenLabs for audio) with proper error handling and user feedback.
-**Solution**: Built robust API integration with fallback handling, progress indicators, and user-friendly error messages.
+### 6. Social Media Integration
+**Challenge**: Creating platform-specific sharing experiences with proper formatting and hashtags.
+**Solution**: Built custom sharing functions for each platform with optimized text, hashtags, and user-friendly instructions.
 
 ## Accomplishments that we're proud of
 
 ### Technical Achievements
-- **Zero-Server Architecture**: Built a complete video production studio that runs entirely in the browser
-- **AI-Powered Content**: Successfully integrated cutting-edge AI for contextual script generation
-- **Professional Quality**: Achieved broadcast-quality 720p vertical videos with synchronized audio
-- **Universal Compatibility**: Videos work perfectly across all platforms and players
-- **Robust Storage**: Implemented a reliable local database system handling large multimedia files
+- **🏗️ Zero-Server Architecture**: Built a complete video production studio that runs entirely in the browser
+- **🤖 AI-Powered Content**: Successfully integrated cutting-edge AI for contextual script generation and avatar creation
+- **🎬 Professional Quality**: Achieved broadcast-quality 720p vertical videos with synchronized audio and captions
+- **🌐 Universal Compatibility**: Videos work perfectly across all platforms and players
+- **💾 Robust Storage**: Implemented a reliable local database system handling large multimedia files and persistent avatars
 
 ### User Experience
-- **Intuitive Workflow**: Created a seamless flow from code upload to professional video output
-- **Real-Time Feedback**: Provides immediate visual and audio feedback for all user actions
-- **Professional Results**: Generates content suitable for social media, education, and professional portfolios
-- **Accessibility**: High contrast design and customizable color schemes for all users
+- **🎯 Intuitive Workflow**: Created a seamless flow from code upload to professional video output
+- **⚡ Real-Time Feedback**: Provides immediate visual and audio feedback for all user actions
+- **🎬 Professional Results**: Generates content suitable for social media, education, and professional portfolios
+- **♿ Accessibility**: High contrast design and customizable color schemes for all users
 
 ### Innovation
-- **Full Circle Experience**: AI analyzes actual code content to create relevant narration
-- **Contextual Intelligence**: Scripts mention specific functions, variables, and patterns from user's code
-- **Professional Production**: Complete video production suite with audio and captions
-- **Social Media Ready**: Perfect vertical format optimized for modern platforms
+- **🔄 Complete Pipeline**: Single interface handles entire video production from code to social media
+- **🤖 Contextual Intelligence**: Scripts mention specific functions, variables, and patterns from user's code
+- **🐧 Avatar Integration**: Seamless avatar overlay with custom positioning and AI generation
+- **📱 Social Media Ready**: Perfect vertical format optimized for modern platforms with built-in sharing
 
 ## What we learned
 
 ### Technical Insights
-- **Canvas API Mastery**: Deep understanding of HTML5 Canvas for professional video generation
-- **AI Integration**: Successfully combining multiple AI services for content creation
-- **Browser Storage Evolution**: Advanced techniques for handling large multimedia files locally
-- **Video Codec Optimization**: Understanding codec selection for maximum compatibility
-- **Real-Time Rendering**: Techniques for maintaining performance during complex animations
+- **🎨 Canvas API Mastery**: Deep understanding of HTML5 Canvas for professional video generation
+- **🤖 AI Integration**: Successfully combining multiple AI services for content creation
+- **💾 Browser Storage Evolution**: Advanced techniques for handling large multimedia files locally
+- **🎥 Video Codec Optimization**: Understanding codec selection for maximum compatibility
+- **⚡ Real-Time Rendering**: Techniques for maintaining performance during complex animations
 
 ### Development Process
-- **Component Architecture**: Building scalable, maintainable React applications
-- **State Management**: Managing complex state across multiple components and modals
-- **Error Handling**: Building robust error handling for AI services and file operations
-- **User Experience**: Creating intuitive workflows for complex technical processes
+- **🏗️ Component Architecture**: Building scalable, maintainable React applications with unified interfaces
+- **🔄 State Management**: Managing complex state across multiple components and modals
+- **🛡️ Error Handling**: Building robust error handling for AI services and file operations
+- **👤 User Experience**: Creating intuitive workflows for complex technical processes
 
 ### Product Development
-- **AI-First Design**: Building applications that leverage AI as a core feature
-- **Content Creation Tools**: Understanding the needs of modern content creators
-- **Cross-Platform Compatibility**: Ensuring broad device and software support
-- **Performance Optimization**: Balancing feature richness with smooth performance
+- **🤖 AI-First Design**: Building applications that leverage AI as a core feature
+- **📱 Content Creation Tools**: Understanding the needs of modern content creators
+- **🌐 Cross-Platform Compatibility**: Ensuring broad device and software support
+- **⚡ Performance Optimization**: Balancing feature richness with smooth performance
 
 ## What's next for CodeStream
 
 ### Short-term Enhancements (Next 3 months)
-- **Enhanced AI Models**: Integration with additional AI providers for script generation
-- **Advanced Audio Controls**: Audio editing, background music, and sound effects
-- **Batch Processing**: Upload and process multiple files simultaneously
-- **Export Options**: Support for different video formats and resolutions
-- **Template System**: Pre-built templates for common use cases
+- **🎨 Enhanced Themes**: More preset color themes and advanced customization options
+- **🎵 Audio Effects**: Background music, sound effects, and audio editing capabilities
+- **📦 Batch Processing**: Upload and process multiple files simultaneously
+- **📤 Export Options**: Support for different video formats and resolutions
+- **📋 Template System**: Pre-built templates for common use cases
 
 ### Medium-term Features (3-6 months)
-- **Cloud Storage Integration**: Optional cloud backup with Google Drive, Dropbox
-- **Collaboration Tools**: Share projects and collaborate on video creation
-- **Advanced Animations**: Zoom effects, highlighting, and custom transitions
-- **Analytics Dashboard**: Track video performance and engagement metrics
-- **Mobile Optimization**: Enhanced mobile experience and touch controls
+- **☁️ Cloud Storage Integration**: Optional cloud backup with Google Drive, Dropbox
+- **👥 Collaboration Tools**: Share projects and collaborate on video creation
+- **🎬 Advanced Animations**: Zoom effects, highlighting, and custom transitions
+- **📊 Analytics Dashboard**: Track video performance and engagement metrics
+- **📱 Mobile Optimization**: Enhanced mobile experience and touch controls
 
 ### Long-term Vision (6+ months)
-- **Live Streaming**: Real-time code streaming for educational purposes
-- **Mobile App**: Native iOS and Android apps for on-the-go editing
-- **Marketplace**: Community-driven template and theme marketplace
-- **Enterprise Features**: Team management, branding controls, and advanced analytics
-- **API Development**: Public API for third-party integrations and custom workflows
+- **📡 Live Streaming**: Real-time code streaming for educational purposes
+- **📱 Mobile App**: Native iOS and Android apps for on-the-go editing
+- **🛒 Marketplace**: Community-driven template and theme marketplace
+- **🏢 Enterprise Features**: Team management, branding controls, and advanced analytics
+- **🔌 API Development**: Public API for third-party integrations and custom workflows
 
 ### Platform Expansion
-- **Social Media Integration**: Direct publishing to TikTok, Instagram, and YouTube
-- **Educational Partnerships**: Integration with coding bootcamps and online learning platforms
-- **Developer Tool Integration**: Plugins for VS Code, GitHub, and other developer tools
-- **Content Creator Tools**: Advanced editing features for professional content creators
+- **📱 Social Media Integration**: Direct publishing to TikTok, Instagram, and YouTube
+- **🎓 Educational Partnerships**: Integration with coding bootcamps and online learning platforms
+- **🛠️ Developer Tool Integration**: Plugins for VS Code, GitHub, and other developer tools
+- **🎬 Content Creator Tools**: Advanced editing features for professional content creators
 
 ---
 
@@ -264,24 +263,26 @@ npm run dev
 ### Usage
 
 #### Basic Video Creation
-1. **Upload Files**: Use the File Manager to upload your code files
-2. **Select & Preview**: Choose a file to preview in the Code Streamer
-3. **Customize**: Adjust streaming speed and color themes
-4. **Record**: Start recording your streaming animation
-5. **Save**: Save to Video Gallery and download as MP4
+1. **📁 Upload Files**: Use the File Manager to upload your code files
+2. **👁️ Select & Preview**: Choose a file to preview in the Code Streamer
+3. **🎨 Customize**: Adjust streaming speed and color themes
+4. **🎬 Record**: Start recording your streaming animation
+5. **💾 Save**: Save to Video Gallery with custom naming
 
-#### FullClip Production (with AI Audio)
-1. **Create Basic Video**: Follow steps above to create a basic video
-2. **Open Audio Studio**: Click "Add Audio" on any video in the gallery
-3. **Set API Keys**: Add your XAI and ElevenLabs API keys
-4. **Generate Script**: Let AI analyze your code and create contextual narration
-5. **Generate Audio**: Choose a voice and create professional narration
-6. **Customize Captions**: Adjust caption styling and positioning
-7. **Produce FullClip**: Combine video, audio, and captions into final MP4
-8. **Download & Share**: Export professional-quality videos for any platform
+#### Complete FullClip Production
+1. **🎬 Create Basic Video**: Follow steps above to create a basic video
+2. **🎵 Open FullClip Studio**: Click "Create FullClip" on any video in the gallery
+3. **⚙️ Configure APIs**: Set your XAI and ElevenLabs API keys (one-time setup)
+4. **🎤 Choose Voice**: Select from professional voice options
+5. **🤖 Generate Script**: Let AI analyze your code and create contextual narration
+6. **🎵 Create Audio**: Generate professional narration with real-time preview
+7. **🐧 Add Avatar**: Upload custom images, generate AI avatars, or choose presets
+8. **📝 Style Captions**: Customize caption appearance and positioning
+9. **🎬 Create FullClip**: Combine everything into a professional social media video
+10. **📱 Share**: Download and share directly to X, TikTok, Instagram, or YouTube
 
 ### API Keys Required for AI Features
-- **XAI API Key**: Get from [x.ai](https://x.ai) for AI script generation
+- **XAI API Key**: Get from [x.ai](https://x.ai) for AI script generation and avatar creation
 - **ElevenLabs API Key**: Get from [elevenlabs.io](https://elevenlabs.io) for voice synthesis
 
 ## Contributing
@@ -296,17 +297,14 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🎯 The CodeStream Experience
 
-**From Code to Content in Minutes**
+**From Code to Social Media in Minutes**
 
 1. **📁 Upload** your code file
-2. **🎬 Watch** it stream with beautiful animations  
-3. **🤖 Generate** AI narration about your specific code
-4. **🎵 Create** professional audio with ElevenLabs
-5. **📝 Add** synchronized captions
-6. **🎥 Export** as professional MP4
-7. **📱 Share** on social media
+2. **🎬 Record** streaming animation with ultra-fast speed controls
+3. **🎵 Create FullClip** with AI narration, captions, and avatars
+4. **📱 Share** directly to TikTok, Instagram, YouTube Shorts, and X
 
-**The result?** Professional, engaging videos that actually explain your code, perfect for TikTok, Instagram, YouTube Shorts, and educational content.
+**The result?** Professional, engaging videos that actually explain your code, perfect for social media, educational content, and developer portfolios.
 
 ---
 
