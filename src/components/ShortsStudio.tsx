@@ -104,8 +104,8 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
     try {
       console.log('Generating custom penguin avatar with Grok Vision...');
       
-      // Enhanced prompt for better penguin generation
-      const enhancedPrompt = `Create a cute, cartoon-style penguin avatar for a coding video. ${customAvatarPrompt}. The penguin should be friendly, professional, and suitable for educational content. Style: clean cartoon illustration, transparent background, high quality, suitable for video overlay.`;
+      // Enhanced prompt for better penguin generation (removed "transparent background")
+      const enhancedPrompt = `Create a cute, cartoon-style penguin avatar for a coding video. ${customAvatarPrompt}. The penguin should be friendly, professional, and suitable for educational content. Style: clean cartoon illustration, high quality, suitable for video overlay.`;
 
       const response = await fetch('https://api.x.ai/v1/images/generations', {
         method: 'POST',
@@ -187,7 +187,7 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
       
       const video = document.createElement('video');
       video.src = videoUrl;
-      video.muted = true;
+      video.muted = false; // Keep audio unmuted for processing
       video.crossOrigin = 'anonymous';
       
       setProcessingProgress('Loading video...');
@@ -219,17 +219,32 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
       canvas.width = 720;
       canvas.height = 1280;
 
-      setProcessingProgress('Setting up recording...');
+      setProcessingProgress('Setting up audio and recording...');
 
-      // Set up MediaRecorder
-      const stream = canvas.captureStream(30);
+      // Set up audio context and capture audio from video
+      const audioContext = new AudioContext();
+      const audioSource = audioContext.createMediaElementSource(video);
+      const audioDestination = audioContext.createMediaStreamDestination();
       
+      // Connect audio source to destination
+      audioSource.connect(audioDestination);
+      audioSource.connect(audioContext.destination); // Also connect to speakers for monitoring
+
+      // Get video stream from canvas
+      const videoStream = canvas.captureStream(30);
+      
+      // Combine video and audio streams
+      const combinedStream = new MediaStream([
+        ...videoStream.getVideoTracks(),
+        ...audioDestination.stream.getAudioTracks()
+      ]);
+
       let mimeType = 'video/mp4';
       if (MediaRecorder.isTypeSupported('video/mp4;codecs=avc1.42E01E')) {
         mimeType = 'video/mp4;codecs=avc1.42E01E';
       }
 
-      const mediaRecorder = new MediaRecorder(stream, {
+      const mediaRecorder = new MediaRecorder(combinedStream, {
         mimeType: mimeType,
         videoBitsPerSecond: 2500000,
         audioBitsPerSecond: 128000
@@ -246,6 +261,9 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
       mediaRecorder.onstop = async () => {
         console.log('Recording stopped, creating final video...');
         setProcessingProgress('Finalizing video...');
+        
+        // Clean up audio context
+        audioContext.close();
         
         const finalBlob = new Blob(chunks, { 
           type: 'video/mp4'
