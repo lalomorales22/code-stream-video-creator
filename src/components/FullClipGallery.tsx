@@ -43,9 +43,19 @@ const FullClipGallery: React.FC<FullClipGalleryProps> = ({
     try {
       console.log('Downloading FullClip video:', video.filename);
       
-      // Create blob with proper MP4 MIME type and codec info
+      // Create blob with proper MP4 MIME type and codec info for maximum compatibility
       const blob = new Blob([video.video_blob], { 
-        type: 'video/mp4; codecs="avc1.42E01E, mp4a.40.2"' 
+        type: 'video/mp4'
+      });
+      
+      // Verify the blob is valid
+      if (blob.size === 0) {
+        throw new Error('Video file is empty or corrupted');
+      }
+      
+      console.log('Video blob details:', {
+        size: blob.size,
+        type: blob.type
       });
       
       const url = URL.createObjectURL(blob);
@@ -65,12 +75,15 @@ const FullClipGallery: React.FC<FullClipGalleryProps> = ({
       a.click();
       document.body.removeChild(a);
       
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      // Clean up URL after a delay
+      setTimeout(() => {
+        URL.revokeObjectURL(url);
+      }, 1000);
       
       console.log('FullClip video download initiated:', filename);
     } catch (error) {
       console.error('Failed to download video:', error);
-      setError('Failed to download video');
+      setError(`Failed to download video: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -299,7 +312,10 @@ const FullClipGallery: React.FC<FullClipGalleryProps> = ({
                       src={URL.createObjectURL(new Blob([selectedVideo.video_blob], { type: 'video/mp4' }))}
                       onLoadStart={() => console.log('FullClip video loading started')}
                       onCanPlay={() => console.log('FullClip video can play')}
-                      onError={(e) => console.error('FullClip video error:', e)}
+                      onError={(e) => {
+                        console.error('FullClip video error:', e);
+                        setError('Failed to load video for playback');
+                      }}
                     />
                     
                     {/* Caption Overlay Info */}

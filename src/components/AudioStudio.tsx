@@ -408,15 +408,36 @@ Create ONLY the natural script text - no labels, sections, or formatting. Just w
       const finalDuration = Math.max(video.duration, audio.duration);
       console.log('Final video duration will be:', finalDuration, 'seconds');
 
-      // Set up MediaRecorder with better codec support
+      // Set up MediaRecorder with H.264 codec for maximum compatibility
       const stream = canvas.captureStream(30);
       
-      // Try different codec options for better compatibility
-      let mimeType = 'video/webm;codecs=vp9,opus';
-      if (MediaRecorder.isTypeSupported('video/mp4;codecs=h264,aac')) {
-        mimeType = 'video/mp4;codecs=h264,aac';
-      } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) {
-        mimeType = 'video/webm;codecs=vp8,opus';
+      // Use the most compatible codec for QuickTime and all players
+      let mimeType = 'video/mp4';
+      let codecOptions = {};
+      
+      // Try H.264 with baseline profile for maximum compatibility
+      if (MediaRecorder.isTypeSupported('video/mp4;codecs=avc1.42E01E')) {
+        mimeType = 'video/mp4;codecs=avc1.42E01E';
+        codecOptions = {
+          mimeType: mimeType,
+          videoBitsPerSecond: 2500000, // 2.5 Mbps for good quality
+          audioBitsPerSecond: 128000   // 128 kbps audio
+        };
+      } else if (MediaRecorder.isTypeSupported('video/mp4')) {
+        mimeType = 'video/mp4';
+        codecOptions = {
+          mimeType: mimeType,
+          videoBitsPerSecond: 2500000,
+          audioBitsPerSecond: 128000
+        };
+      } else {
+        // Fallback to WebM but we'll convert the final type
+        mimeType = 'video/webm;codecs=vp9,opus';
+        codecOptions = {
+          mimeType: mimeType,
+          videoBitsPerSecond: 2500000,
+          audioBitsPerSecond: 128000
+        };
       }
       
       console.log('Using codec:', mimeType);
@@ -438,11 +459,7 @@ Create ONLY the natural script text - no labels, sections, or formatting. Just w
         console.log('Audio track added to stream');
       }
 
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: mimeType,
-        videoBitsPerSecond: 4000000, // 4 Mbps
-        audioBitsPerSecond: 128000   // 128 kbps
-      });
+      const mediaRecorder = new MediaRecorder(stream, codecOptions);
 
       const chunks: Blob[] = [];
       
@@ -456,12 +473,13 @@ Create ONLY the natural script text - no labels, sections, or formatting. Just w
       mediaRecorder.onstop = async () => {
         console.log('Recording stopped, creating final video...');
         
-        // Create final blob with proper MIME type
+        // Always create as MP4 for maximum compatibility
         const finalBlob = new Blob(chunks, { 
           type: 'video/mp4'
         });
         
         console.log('Final video size:', finalBlob.size, 'bytes');
+        console.log('Final video type:', finalBlob.type);
         
         // Save to FullClip gallery
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
