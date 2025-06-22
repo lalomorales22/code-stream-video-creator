@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Play, Download, Trash2, Calendar, Clock, Code, X, Save, AlertCircle } from 'lucide-react';
+import { Play, Download, Trash2, Calendar, Clock, Code, X, Save, AlertCircle, FileAudio, Mic } from 'lucide-react';
 import { dbManager, VideoRecord } from '../utils/database';
+import AudioStudio from './AudioStudio';
+import FullClipGallery from './FullClipGallery';
 
 interface VideoGalleryProps {
   isOpen: boolean;
@@ -26,7 +28,10 @@ const VideoGallery: React.FC<VideoGalleryProps> = ({
   const [selectedVideo, setSelectedVideo] = useState<VideoRecord | null>(null);
   const [savingPending, setSavingPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [dbStats, setDbStats] = useState<{ videoCount: number; dbSize: number } | null>(null);
+  const [dbStats, setDbStats] = useState<{ videoCount: number; fullClipCount: number; dbSize: number } | null>(null);
+  const [isAudioStudioOpen, setIsAudioStudioOpen] = useState(false);
+  const [isFullClipGalleryOpen, setIsFullClipGalleryOpen] = useState(false);
+  const [videoForAudio, setVideoForAudio] = useState<VideoRecord | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -170,6 +175,21 @@ const VideoGallery: React.FC<VideoGalleryProps> = ({
     setSelectedVideo(video);
   };
 
+  const handleAddAudio = (video: VideoRecord) => {
+    setVideoForAudio(video);
+    setIsAudioStudioOpen(true);
+  };
+
+  const handleAudioStudioClose = () => {
+    setIsAudioStudioOpen(false);
+    setVideoForAudio(null);
+  };
+
+  const handleAudioVideoSaved = async () => {
+    await loadDbStats();
+    // Optionally refresh the video list or show a success message
+  };
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
@@ -197,204 +217,251 @@ const VideoGallery: React.FC<VideoGalleryProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-center justify-center p-6">
-      <div className="bg-black border-2 border-white rounded-xl w-full max-w-7xl h-[90vh] flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b-2 border-white">
-          <div className="flex items-center gap-6">
-            <h2 className="text-3xl font-bold text-white flex items-center gap-3">
-              <div className="p-2 border-2 border-white rounded-lg">
-                <Play className="w-6 h-6 text-white" />
-              </div>
-              Video Gallery
-            </h2>
-            {dbStats && (
-              <div className="text-lg text-gray-400 font-medium">
-                {dbStats.videoCount} videos • {formatFileSize(dbStats.dbSize)} total
-              </div>
-            )}
-          </div>
-          <button
-            onClick={onClose}
-            className="p-3 hover:bg-white hover:text-black rounded-lg transition-colors border-2 border-white text-white"
-          >
-            <X className="w-6 h-6" />
-          </button>
-        </div>
-
-        {/* Error Display */}
-        {error && (
-          <div className="mx-6 mt-4 bg-black border-2 border-white rounded-lg p-4 flex items-center gap-3">
-            <AlertCircle className="w-6 h-6 text-white flex-shrink-0" />
-            <span className="text-white font-medium">{error}</span>
-            <button
-              onClick={() => setError(null)}
-              className="ml-auto text-white hover:bg-white hover:text-black p-1 rounded"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-        )}
-
-        <div className="flex-1 flex overflow-hidden">
-          {/* Video List */}
-          <div className="w-1/2 border-r-2 border-white flex flex-col">
-            <div className="p-6 border-b-2 border-white">
-              <h3 className="text-2xl font-bold text-white mb-6">Saved Videos</h3>
-              
-              {/* Pending Video Save */}
-              {pendingVideo && (
-                <div className="bg-black border-2 border-white rounded-lg p-6 mb-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <span className="text-white font-bold text-lg">New Recording Ready</span>
-                    <button
-                      onClick={handleSavePendingVideo}
-                      disabled={savingPending}
-                      className="flex items-center gap-2 bg-white hover:bg-gray-200 disabled:bg-gray-600 
-                               text-black px-4 py-2 rounded font-bold transition-colors border-2 border-white"
-                    >
-                      <Save className="w-5 h-5" />
-                      {savingPending ? 'Saving...' : 'Save to Gallery'}
-                    </button>
-                  </div>
-                  <p className="text-lg text-white font-medium">{pendingVideo.originalFilename}</p>
-                  <div className="flex items-center gap-6 text-sm text-gray-400 font-medium mt-2">
-                    <span>{formatDuration(pendingVideo.duration)}</span>
-                    <span>{formatFileSize(pendingVideo.blob.size)}</span>
-                    <span className="capitalize">{pendingVideo.language}</span>
-                  </div>
+    <>
+      <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-center justify-center p-6">
+        <div className="bg-black border-2 border-white rounded-xl w-full max-w-7xl h-[90vh] flex flex-col">
+          {/* Header */}
+          <div className="flex items-center justify-between p-6 border-b-2 border-white">
+            <div className="flex items-center gap-6">
+              <h2 className="text-3xl font-bold text-white flex items-center gap-3">
+                <div className="p-2 border-2 border-white rounded-lg">
+                  <Play className="w-6 h-6 text-white" />
+                </div>
+                Video Gallery
+              </h2>
+              {dbStats && (
+                <div className="text-lg text-gray-400 font-medium">
+                  {dbStats.videoCount} videos • {dbStats.fullClipCount} with audio • {formatFileSize(dbStats.dbSize)} total
                 </div>
               )}
             </div>
-
-            <div className="flex-1 overflow-y-auto p-6">
-              {loading ? (
-                <div className="text-center text-gray-400 py-12 text-xl font-medium">Loading videos...</div>
-              ) : videos.length === 0 ? (
-                <div className="text-center text-gray-400 py-12 border-2 border-dashed border-gray-600 rounded-lg">
-                  <Play className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                  <p className="text-xl font-bold">No videos saved yet</p>
-                  <p className="text-lg mt-2">Record some code streams to get started</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {videos.map(video => (
-                    <div
-                      key={video.id}
-                      className={`bg-black rounded-lg p-6 border-2 transition-all cursor-pointer
-                                ${selectedVideo?.id === video.id 
-                                  ? 'border-white bg-white text-black' 
-                                  : 'border-gray-600 hover:border-white text-white'}`}
-                      onClick={() => handlePlayVideo(video)}
-                    >
-                      <div className="flex items-start justify-between mb-3">
-                        <h4 className="font-bold text-lg truncate">{video.original_filename}</h4>
-                        <div className="flex gap-2 ml-4">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDownloadVideo(video);
-                            }}
-                            className={`p-2 rounded transition-colors border-2 ${
-                              selectedVideo?.id === video.id 
-                                ? 'border-black text-black hover:bg-black hover:text-white' 
-                                : 'border-white text-white hover:bg-white hover:text-black'
-                            }`}
-                            title="Download MP4"
-                          >
-                            <Download className="w-5 h-5" />
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteVideo(video.id);
-                            }}
-                            className={`p-2 rounded transition-colors border-2 ${
-                              selectedVideo?.id === video.id 
-                                ? 'border-black text-black hover:bg-black hover:text-white' 
-                                : 'border-white text-white hover:bg-white hover:text-black'
-                            }`}
-                          >
-                            <Trash2 className="w-5 h-5" />
-                          </button>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center gap-6 text-sm font-medium">
-                        <div className="flex items-center gap-2">
-                          <Code className="w-4 h-4" />
-                          <span className="capitalize">{video.file_language}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Clock className="w-4 h-4" />
-                          <span>{formatDuration(video.duration)}</span>
-                        </div>
-                        <div className="text-sm">
-                          {formatFileSize(video.video_blob.length)}
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center gap-2 text-xs mt-2 opacity-75">
-                        <Calendar className="w-3 h-3" />
-                        <span>{formatDate(video.created_at)}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => setIsFullClipGalleryOpen(true)}
+                className="flex items-center gap-2 bg-white hover:bg-gray-200 text-black px-4 py-2 rounded-lg font-bold transition-colors border-2 border-white"
+              >
+                <FileAudio className="w-5 h-5" />
+                FullClip Gallery
+              </button>
+              <button
+                onClick={onClose}
+                className="p-3 hover:bg-white hover:text-black rounded-lg transition-colors border-2 border-white text-white"
+              >
+                <X className="w-6 h-6" />
+              </button>
             </div>
           </div>
 
-          {/* Video Player */}
-          <div className="w-1/2 flex flex-col">
-            <div className="p-6 border-b-2 border-white">
-              <h3 className="text-2xl font-bold text-white">Preview</h3>
+          {/* Error Display */}
+          {error && (
+            <div className="mx-6 mt-4 bg-black border-2 border-white rounded-lg p-4 flex items-center gap-3">
+              <AlertCircle className="w-6 h-6 text-white flex-shrink-0" />
+              <span className="text-white font-medium">{error}</span>
+              <button
+                onClick={() => setError(null)}
+                className="ml-auto text-white hover:bg-white hover:text-black p-1 rounded"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
-            
-            <div className="flex-1 flex items-center justify-center p-6">
-              {selectedVideo ? (
-                <div className="w-full max-w-md">
-                  <video
-                    key={selectedVideo.id}
-                    controls
-                    className="w-full bg-black rounded-lg border-2 border-white"
-                    style={{ aspectRatio: '9/16' }}
-                    src={URL.createObjectURL(new Blob([selectedVideo.video_blob], { type: 'video/mp4' }))}
-                    onLoadStart={() => console.log('Video loading started')}
-                    onCanPlay={() => console.log('Video can play')}
-                    onError={(e) => console.error('Video error:', e)}
-                  />
-                  <div className="mt-6 text-center">
-                    <h4 className="font-bold text-xl text-white mb-3">{selectedVideo.original_filename}</h4>
-                    <div className="flex justify-center gap-6 text-lg text-gray-400 font-medium">
-                      <span className="capitalize">{selectedVideo.file_language}</span>
-                      <span>{formatDuration(selectedVideo.duration)}</span>
-                      <span>{formatFileSize(selectedVideo.video_blob.length)}</span>
-                    </div>
-                    <div className="mt-4">
+          )}
+
+          <div className="flex-1 flex overflow-hidden">
+            {/* Video List */}
+            <div className="w-1/2 border-r-2 border-white flex flex-col">
+              <div className="p-6 border-b-2 border-white">
+                <h3 className="text-2xl font-bold text-white mb-6">Saved Videos</h3>
+                
+                {/* Pending Video Save */}
+                {pendingVideo && (
+                  <div className="bg-black border-2 border-white rounded-lg p-6 mb-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <span className="text-white font-bold text-lg">New Recording Ready</span>
                       <button
-                        onClick={() => handleDownloadVideo(selectedVideo)}
-                        className="bg-white hover:bg-gray-200 text-black px-6 py-3 rounded-lg font-bold 
-                                 transition-colors border-2 border-white flex items-center gap-2 mx-auto"
+                        onClick={handleSavePendingVideo}
+                        disabled={savingPending}
+                        className="flex items-center gap-2 bg-white hover:bg-gray-200 disabled:bg-gray-600 
+                                 text-black px-4 py-2 rounded font-bold transition-colors border-2 border-white"
                       >
-                        <Download className="w-5 h-5" />
-                        Download MP4
+                        <Save className="w-5 h-5" />
+                        {savingPending ? 'Saving...' : 'Save to Gallery'}
                       </button>
                     </div>
+                    <p className="text-lg text-white font-medium">{pendingVideo.originalFilename}</p>
+                    <div className="flex items-center gap-6 text-sm text-gray-400 font-medium mt-2">
+                      <span>{formatDuration(pendingVideo.duration)}</span>
+                      <span>{formatFileSize(pendingVideo.blob.size)}</span>
+                      <span className="capitalize">{pendingVideo.language}</span>
+                    </div>
                   </div>
-                </div>
-              ) : (
-                <div className="text-center text-gray-400">
-                  <Play className="w-20 h-20 mx-auto mb-6 opacity-50" />
-                  <p className="text-2xl font-bold">Select a video to preview</p>
-                  <p className="text-lg mt-2">Click on any video from the list to play it here</p>
-                </div>
-              )}
+                )}
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6">
+                {loading ? (
+                  <div className="text-center text-gray-400 py-12 text-xl font-medium">Loading videos...</div>
+                ) : videos.length === 0 ? (
+                  <div className="text-center text-gray-400 py-12 border-2 border-dashed border-gray-600 rounded-lg">
+                    <Play className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                    <p className="text-xl font-bold">No videos saved yet</p>
+                    <p className="text-lg mt-2">Record some code streams to get started</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {videos.map(video => (
+                      <div
+                        key={video.id}
+                        className={`bg-black rounded-lg p-6 border-2 transition-all cursor-pointer
+                                  ${selectedVideo?.id === video.id 
+                                    ? 'border-white bg-white text-black' 
+                                    : 'border-gray-600 hover:border-white text-white'}`}
+                        onClick={() => handlePlayVideo(video)}
+                      >
+                        <div className="flex items-start justify-between mb-3">
+                          <h4 className="font-bold text-lg truncate">{video.original_filename}</h4>
+                          <div className="flex gap-2 ml-4">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleAddAudio(video);
+                              }}
+                              className={`p-2 rounded transition-colors border-2 ${
+                                selectedVideo?.id === video.id 
+                                  ? 'border-black text-black hover:bg-black hover:text-white' 
+                                  : 'border-white text-white hover:bg-white hover:text-black'
+                              }`}
+                              title="Add Audio & Captions"
+                            >
+                              <Mic className="w-5 h-5" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDownloadVideo(video);
+                              }}
+                              className={`p-2 rounded transition-colors border-2 ${
+                                selectedVideo?.id === video.id 
+                                  ? 'border-black text-black hover:bg-black hover:text-white' 
+                                  : 'border-white text-white hover:bg-white hover:text-black'
+                              }`}
+                              title="Download MP4"
+                            >
+                              <Download className="w-5 h-5" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteVideo(video.id);
+                              }}
+                              className={`p-2 rounded transition-colors border-2 ${
+                                selectedVideo?.id === video.id 
+                                  ? 'border-black text-black hover:bg-black hover:text-white' 
+                                  : 'border-white text-white hover:bg-white hover:text-black'
+                              }`}
+                            >
+                              <Trash2 className="w-5 h-5" />
+                            </button>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-6 text-sm font-medium">
+                          <div className="flex items-center gap-2">
+                            <Code className="w-4 h-4" />
+                            <span className="capitalize">{video.file_language}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Clock className="w-4 h-4" />
+                            <span>{formatDuration(video.duration)}</span>
+                          </div>
+                          <div className="text-sm">
+                            {formatFileSize(video.video_blob.length)}
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-2 text-xs mt-2 opacity-75">
+                          <Calendar className="w-3 h-3" />
+                          <span>{formatDate(video.created_at)}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Video Player */}
+            <div className="w-1/2 flex flex-col">
+              <div className="p-6 border-b-2 border-white">
+                <h3 className="text-2xl font-bold text-white">Preview</h3>
+              </div>
+              
+              <div className="flex-1 flex items-center justify-center p-6">
+                {selectedVideo ? (
+                  <div className="w-full max-w-md">
+                    <video
+                      key={selectedVideo.id}
+                      controls
+                      className="w-full bg-black rounded-lg border-2 border-white"
+                      style={{ aspectRatio: '9/16' }}
+                      src={URL.createObjectURL(new Blob([selectedVideo.video_blob], { type: 'video/mp4' }))}
+                      onLoadStart={() => console.log('Video loading started')}
+                      onCanPlay={() => console.log('Video can play')}
+                      onError={(e) => console.error('Video error:', e)}
+                    />
+                    <div className="mt-6 text-center">
+                      <h4 className="font-bold text-xl text-white mb-3">{selectedVideo.original_filename}</h4>
+                      <div className="flex justify-center gap-6 text-lg text-gray-400 font-medium mb-4">
+                        <span className="capitalize">{selectedVideo.file_language}</span>
+                        <span>{formatDuration(selectedVideo.duration)}</span>
+                        <span>{formatFileSize(selectedVideo.video_blob.length)}</span>
+                      </div>
+                      <div className="flex gap-4 justify-center">
+                        <button
+                          onClick={() => handleAddAudio(selectedVideo)}
+                          className="bg-white hover:bg-gray-200 text-black px-6 py-3 rounded-lg font-bold 
+                                   transition-colors border-2 border-white flex items-center gap-2"
+                        >
+                          <Mic className="w-5 h-5" />
+                          Add Audio
+                        </button>
+                        <button
+                          onClick={() => handleDownloadVideo(selectedVideo)}
+                          className="bg-black hover:bg-white hover:text-black text-white px-6 py-3 rounded-lg font-bold 
+                                   transition-colors border-2 border-white flex items-center gap-2"
+                        >
+                          <Download className="w-5 h-5" />
+                          Download MP4
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center text-gray-400">
+                    <Play className="w-20 h-20 mx-auto mb-6 opacity-50" />
+                    <p className="text-2xl font-bold">Select a video to preview</p>
+                    <p className="text-lg mt-2">Click on any video from the list to play it here</p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
+
+      {/* Audio Studio Modal */}
+      <AudioStudio
+        isOpen={isAudioStudioOpen}
+        onClose={handleAudioStudioClose}
+        selectedVideo={videoForAudio}
+        onAudioVideoSaved={handleAudioVideoSaved}
+      />
+
+      {/* FullClip Gallery Modal */}
+      <FullClipGallery
+        isOpen={isFullClipGalleryOpen}
+        onClose={() => setIsFullClipGalleryOpen(false)}
+      />
+    </>
   );
 };
 

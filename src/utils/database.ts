@@ -10,6 +10,18 @@ export interface VideoRecord {
   video_blob: Uint8Array;
 }
 
+export interface FullClipVideoRecord {
+  id: number;
+  filename: string;
+  original_filename: string;
+  file_language: string;
+  duration: number;
+  created_at: string;
+  video_blob: Uint8Array;
+  script: string;
+  captions: string; // JSON string of caption segments
+}
+
 class DatabaseManager {
   private db: any = null;
   private SQL: any = null;
@@ -58,7 +70,8 @@ class DatabaseManager {
 
   private createTables() {
     try {
-      const createTableSQL = `
+      // Original videos table
+      const createVideosTableSQL = `
         CREATE TABLE IF NOT EXISTS videos (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           filename TEXT NOT NULL,
@@ -70,7 +83,23 @@ class DatabaseManager {
         );
       `;
 
-      this.db.run(createTableSQL);
+      // New FullClip videos table for videos with audio and captions
+      const createFullClipVideosTableSQL = `
+        CREATE TABLE IF NOT EXISTS fullclip_videos (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          filename TEXT NOT NULL,
+          original_filename TEXT NOT NULL,
+          file_language TEXT NOT NULL,
+          duration INTEGER NOT NULL,
+          created_at TEXT NOT NULL,
+          video_blob BLOB NOT NULL,
+          script TEXT,
+          captions TEXT
+        );
+      `;
+
+      this.db.run(createVideosTableSQL);
+      this.db.run(createFullClipVideosTableSQL);
       console.log('Tables created/verified successfully');
       this.saveDatabase();
     } catch (error) {
@@ -138,6 +167,7 @@ class DatabaseManager {
     }
   }
 
+  // Original video methods
   async saveVideo(
     filename: string,
     originalFilename: string,
@@ -268,10 +298,148 @@ class DatabaseManager {
     }
   }
 
+  // FullClip video methods (videos with audio and captions)
+  async saveFullClipVideo(
+    filename: string,
+    originalFilename: string,
+    language: string,
+    duration: number,
+    videoBlob: Blob,
+    script: string,
+    captions: any[]
+  ): Promise<number> {
+    try {
+      await this.initialize();
+      console.log('Saving FullClip video:', { filename, originalFilename, language, duration, blobSize: videoBlob.size });
+
+      const arrayBuffer = await videoBlob.arrayBuffer();
+      const uint8Array = new Uint8Array(arrayBuffer);
+      const createdAt = new Date().toISOString();
+      const captionsJson = JSON.stringify(captions);
+
+      console.log('FullClip video blob converted to Uint8Array, size:', uint8Array.length);
+
+      const stmt = this.db.prepare(`
+        INSERT INTO fullclip_videos (filename, original_filename, file_language, duration, created_at, video_blob, script, captions)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      stmt.run([filename, originalFilename, language, duration, createdAt, uint8Array, script, captionsJson]);
+      
+      // Get the inserted ID
+      const result = this.db.exec("SELECT last_insert_rowid()");
+      const videoId = result[0].values[0][0];
+
+      stmt.free();
+      await this.saveDatabase();
+
+      console.log('FullClip video saved successfully with ID:', videoId);
+      return videoId;
+    } catch (error) {
+      console.error('Failed to save FullClip video:', error);
+      throw error;
+    }
+  }
+
+  async getAllFullClipVideos(): Promise<FullClipVideoRecord[]> {
+    try {
+      await this.initialize();
+      console.log('Loading all FullClip videos...');
+
+      const result = this.db.exec(`
+        SELECT id, filename, original_filename, file_language, duration, created_at, video_blob, script, captions
+        FROM fullclip_videos
+        ORDER BY created_at DESC
+      `);
+
+      if (!result || result.length === 0) {
+        console.log('No FullClip videos found in database');
+        return [];
+      }
+
+      const videos: FullClipVideoRecord[] = [];
+      const values = result[0].values;
+
+      for (const row of values) {
+        const video: FullClipVideoRecord = {
+          id: row[0] as number,
+          filename: row[1] as string,
+          original_filename: row[2] as string,
+          file_language: row[3] as string,
+          duration: row[4] as number,
+          created_at: row[5] as string,
+          video_blob: row[6] as Uint8Array,
+          script: row[7] as string,
+          captions: row[8] as string
+        };
+        videos.push(video);
+      }
+
+      console.log('Loaded', videos.length, 'FullClip videos from database');
+      return videos;
+    } catch (error) {
+      console.error('Failed to load FullClip videos:', error);
+      return [];
+    }
+  }
+
+  async getFullClipVideo(id: number): Promise<FullClipVideoRecord | null> {
+    try {
+      await this.initialize();
+
+      const result = this.db.exec(`
+        SELECT id, filename, original_filename, file_language, duration, created_at, video_blob, script, captions
+        FROM fullclip_videos
+        WHERE id = ?
+      `, [id]);
+
+      if (!result || result.length === 0 || result[0].values.length === 0) {
+        return null;
+      }
+
+      const row = result[0].values[0];
+      const video: FullClipVideoRecord = {
+        id: row[0] as number,
+        filename: row[1] as string,
+        original_filename: row[2] as string,
+        file_language: row[3] as string,
+        duration: row[4] as number,
+        created_at: row[5] as string,
+        video_blob: row[6] as Uint8Array,
+        script: row[7] as string,
+        captions: row[8] as string
+      };
+
+      return video;
+    } catch (error) {
+      console.error('Failed to get FullClip video:', error);
+      return null;
+    }
+  }
+
+  async deleteFullClipVideo(id: number): Promise<boolean> {
+    try {
+      await this.initialize();
+      console.log('Deleting FullClip video with ID:', id);
+
+      this.db.run('DELETE FROM fullclip_videos WHERE id = ?', [id]);
+      const changes = this.db.getRowsModified();
+      
+      await this.saveDatabase();
+      console.log('FullClip video deleted, rows affected:', changes);
+
+      return changes > 0;
+    } catch (error) {
+      console.error('Failed to delete FullClip video:', error);
+      return false;
+    }
+  }
+
   async clearAllVideos(): Promise<void> {
     try {
       await this.initialize();
       this.db.run('DELETE FROM videos');
+      this.db.run('DELETE FROM fullclip_videos');
       await this.saveDatabase();
       console.log('All videos cleared from database');
     } catch (error) {
@@ -281,12 +449,15 @@ class DatabaseManager {
   }
 
   // Debug method to check database status
-  async getStats(): Promise<{ videoCount: number; dbSize: number }> {
+  async getStats(): Promise<{ videoCount: number; fullClipCount: number; dbSize: number }> {
     try {
       await this.initialize();
       
-      const countResult = this.db.exec('SELECT COUNT(*) FROM videos');
-      const videoCount = countResult[0]?.values[0]?.[0] || 0;
+      const videoCountResult = this.db.exec('SELECT COUNT(*) FROM videos');
+      const videoCount = videoCountResult[0]?.values[0]?.[0] || 0;
+      
+      const fullClipCountResult = this.db.exec('SELECT COUNT(*) FROM fullclip_videos');
+      const fullClipCount = fullClipCountResult[0]?.values[0]?.[0] || 0;
       
       // Get database size from IndexedDB
       let dbSize = 0;
@@ -297,10 +468,10 @@ class DatabaseManager {
         console.warn('Could not get database size:', error);
       }
       
-      return { videoCount, dbSize };
+      return { videoCount, fullClipCount, dbSize };
     } catch (error) {
       console.error('Failed to get stats:', error);
-      return { videoCount: 0, dbSize: 0 };
+      return { videoCount: 0, fullClipCount: 0, dbSize: 0 };
     }
   }
 }
