@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, Download, Trash2, Calendar, Clock, Code, X, Save, AlertCircle, FileAudio, Mic, Loader2, Users, Edit3, Captions, Sparkles, CheckCircle, Share2, ExternalLink, Image as ImageIcon, Plus } from 'lucide-react';
+import { Play, Download, Trash2, Calendar, Clock, Code, X, Save, AlertCircle, FileAudio, Mic, Loader2, Users, Edit3, Captions, Sparkles, CheckCircle, Share2, ExternalLink, Image as ImageIcon, Upload } from 'lucide-react';
 import { dbManager, VideoRecord, FullClipVideoRecord, ShortsVideoRecord } from '../utils/database';
 import AudioStudio from './AudioStudio';
 import ShortsStudio from './ShortsStudio';
@@ -20,277 +20,6 @@ interface UnifiedGalleryProps {
 }
 
 type GalleryTab = 'videos' | 'fullclip' | 'shorts';
-
-// Thumbnail Modal Component
-const ThumbnailModal: React.FC<{
-  isOpen: boolean;
-  onClose: () => void;
-  onDownloadWithThumbnail: (thumbnailBlob: Blob | null) => void;
-  videoName: string;
-}> = ({ isOpen, onClose, onDownloadWithThumbnail, videoName }) => {
-  const [thumbnailImage, setThumbnailImage] = useState<string | null>(null);
-  const [thumbnailBlob, setThumbnailBlob] = useState<Blob | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-
-  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file && file.type.startsWith('image/')) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const imageUrl = e.target?.result as string;
-        setThumbnailImage(imageUrl);
-        setThumbnailBlob(file);
-      };
-      reader.readAsDataURL(file);
-    } else {
-      alert('Please select a valid image file (PNG, JPG, GIF, etc.)');
-    }
-    
-    // Reset input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
-
-  const generateTextThumbnail = async () => {
-    setIsProcessing(true);
-    try {
-      const canvas = canvasRef.current!;
-      const ctx = canvas.getContext('2d')!;
-      
-      // Set canvas size for vertical video thumbnail
-      canvas.width = 720;
-      canvas.height = 1280;
-      
-      // Create gradient background
-      const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-      gradient.addColorStop(0, '#1a1a2e');
-      gradient.addColorStop(0.5, '#16213e');
-      gradient.addColorStop(1, '#0f0f23');
-      ctx.fillStyle = gradient;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      
-      // Add subtle pattern
-      ctx.globalAlpha = 0.1;
-      for (let i = 0; i < canvas.width; i += 40) {
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(i, 0);
-        ctx.lineTo(i, canvas.height);
-        ctx.stroke();
-      }
-      ctx.globalAlpha = 1;
-      
-      // Add main title
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 48px Arial';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      
-      // Split video name into lines for better display
-      const words = videoName.split(' ');
-      const lines: string[] = [];
-      let currentLine = '';
-      
-      for (const word of words) {
-        const testLine = currentLine + (currentLine ? ' ' : '') + word;
-        const metrics = ctx.measureText(testLine);
-        
-        if (metrics.width > canvas.width - 80 && currentLine) {
-          lines.push(currentLine);
-          currentLine = word;
-        } else {
-          currentLine = testLine;
-        }
-      }
-      if (currentLine) {
-        lines.push(currentLine);
-      }
-      
-      // Draw title lines
-      const startY = canvas.height / 2 - (lines.length * 30);
-      lines.forEach((line, index) => {
-        ctx.fillText(line, canvas.width / 2, startY + (index * 60));
-      });
-      
-      // Add subtitle
-      ctx.font = 'bold 32px Arial';
-      ctx.fillStyle = '#4ECDC4';
-      ctx.fillText('Code Streaming Video', canvas.width / 2, startY + (lines.length * 60) + 80);
-      
-      // Add CodeStream branding
-      ctx.font = 'bold 24px Arial';
-      ctx.fillStyle = '#FF6B9D';
-      ctx.fillText('Created with CodeStream', canvas.width / 2, canvas.height - 100);
-      
-      // Add decorative elements
-      ctx.strokeStyle = '#4ECDC4';
-      ctx.lineWidth = 4;
-      ctx.beginPath();
-      ctx.rect(40, 40, canvas.width - 80, canvas.height - 80);
-      ctx.stroke();
-      
-      // Convert canvas to blob
-      canvas.toBlob((blob) => {
-        if (blob) {
-          const url = URL.createObjectURL(blob);
-          setThumbnailImage(url);
-          setThumbnailBlob(blob);
-        }
-      }, 'image/png');
-      
-    } catch (error) {
-      console.error('Failed to generate text thumbnail:', error);
-      alert('Failed to generate thumbnail. Please try again.');
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleDownload = () => {
-    onDownloadWithThumbnail(thumbnailBlob);
-    onClose();
-  };
-
-  const handleSkipThumbnail = () => {
-    onDownloadWithThumbnail(null);
-    onClose();
-  };
-
-  const clearThumbnail = () => {
-    setThumbnailImage(null);
-    setThumbnailBlob(null);
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black/95 backdrop-blur-sm z-[60] flex items-center justify-center p-6">
-      <div className="bg-black border-2 border-white rounded-xl max-w-2xl w-full relative">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b-2 border-white">
-          <h3 className="text-2xl font-bold text-white flex items-center gap-3">
-            <div className="p-2 border-2 border-white rounded-lg">
-              <ImageIcon className="w-6 h-6 text-white" />
-            </div>
-            Add Thumbnail
-          </h3>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-white hover:text-black rounded-lg transition-colors border-2 border-white text-white"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <div className="p-6 space-y-6">
-          <p className="text-gray-300 text-lg">
-            Add a 1-second thumbnail to the beginning of your video for better social media engagement.
-          </p>
-
-          {/* Thumbnail Options */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Upload Image */}
-            <div className="space-y-3">
-              <h4 className="text-white font-bold text-lg">Upload Image</h4>
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="w-full flex items-center justify-center gap-3 py-4 px-6 rounded-lg font-bold 
-                         bg-black border-2 border-white text-white hover:bg-white hover:text-black transition-colors"
-              >
-                <Plus className="w-5 h-5" />
-                Choose Image
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleImageUpload}
-                className="hidden"
-              />
-              <p className="text-gray-400 text-sm">
-                Upload PNG, JPG, or other image formats
-              </p>
-            </div>
-
-            {/* Generate Text Thumbnail */}
-            <div className="space-y-3">
-              <h4 className="text-white font-bold text-lg">Auto-Generate</h4>
-              <button
-                onClick={generateTextThumbnail}
-                disabled={isProcessing}
-                className="w-full flex items-center justify-center gap-3 py-4 px-6 rounded-lg font-bold 
-                         bg-white text-black hover:bg-gray-200 disabled:bg-gray-600 disabled:text-gray-300 transition-colors border-2 border-white"
-              >
-                {isProcessing ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                ) : (
-                  <Sparkles className="w-5 h-5" />
-                )}
-                {isProcessing ? 'Generating...' : 'Generate Thumbnail'}
-              </button>
-              <p className="text-gray-400 text-sm">
-                Create a text-based thumbnail with video title
-              </p>
-            </div>
-          </div>
-
-          {/* Thumbnail Preview */}
-          {thumbnailImage && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h4 className="text-white font-bold text-lg">Thumbnail Preview</h4>
-                <button
-                  onClick={clearThumbnail}
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-              <div className="flex justify-center">
-                <img
-                  src={thumbnailImage}
-                  alt="Thumbnail preview"
-                  className="max-w-xs border-2 border-white rounded-lg"
-                  style={{ aspectRatio: '9/16' }}
-                />
-              </div>
-              <p className="text-center text-gray-400 text-sm">
-                This thumbnail will be shown for 1 second at the beginning of your video
-              </p>
-            </div>
-          )}
-
-          {/* Action Buttons */}
-          <div className="flex gap-4 pt-4">
-            <button
-              onClick={handleSkipThumbnail}
-              className="flex-1 bg-black border-2 border-white text-white hover:bg-white hover:text-black 
-                       px-6 py-3 rounded-lg font-bold transition-colors"
-            >
-              Skip Thumbnail
-            </button>
-            <button
-              onClick={handleDownload}
-              disabled={!thumbnailBlob}
-              className="flex-1 bg-white text-black hover:bg-gray-200 disabled:bg-gray-600 disabled:text-gray-300
-                       px-6 py-3 rounded-lg font-bold transition-colors border-2 border-white flex items-center justify-center gap-2"
-            >
-              <Download className="w-5 h-5" />
-              Download with Thumbnail
-            </button>
-          </div>
-        </div>
-
-        {/* Hidden canvas for thumbnail generation */}
-        <canvas ref={canvasRef} className="hidden" />
-      </div>
-    </div>
-  );
-};
 
 // Social Media Icons (using Lucide icons styled to match platforms)
 const XIcon: React.FC<{ className?: string }> = ({ className }) => (
@@ -316,6 +45,431 @@ const YouTubeIcon: React.FC<{ className?: string }> = ({ className }) => (
     <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
   </svg>
 );
+
+// FIXED: Thumbnail Modal Component with proper event handling
+const ThumbnailModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  onDownloadWithThumbnail: (thumbnailImage: HTMLImageElement | null) => Promise<void>;
+  videoName: string;
+}> = ({ isOpen, onClose, onDownloadWithThumbnail, videoName }) => {
+  const [thumbnailImage, setThumbnailImage] = useState<HTMLImageElement | null>(null);
+  const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Reset state when modal opens/closes
+  useEffect(() => {
+    if (!isOpen) {
+      setThumbnailImage(null);
+      setThumbnailPreview(null);
+      setIsGenerating(false);
+      setIsProcessing(false);
+    }
+  }, [isOpen]);
+
+  // FIXED: Prevent form submission and page refresh
+  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      alert('Please select a valid image file (PNG, JPG, GIF, etc.)');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const imageUrl = e.target?.result as string;
+      setThumbnailPreview(imageUrl);
+      
+      // Create image element
+      const img = new Image();
+      img.onload = () => {
+        setThumbnailImage(img);
+        console.log('Thumbnail image loaded successfully');
+      };
+      img.onerror = () => {
+        console.error('Failed to load thumbnail image');
+        alert('Failed to load the selected image. Please try another file.');
+        setThumbnailPreview(null);
+        setThumbnailImage(null);
+      };
+      img.src = imageUrl;
+    };
+    
+    reader.onerror = () => {
+      console.error('Failed to read image file');
+      alert('Failed to read the image file. Please try again.');
+    };
+    
+    reader.readAsDataURL(file);
+    
+    // Reset input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  // FIXED: Generate text thumbnail with proper error handling
+  const generateTextThumbnail = async () => {
+    setIsGenerating(true);
+    
+    try {
+      const canvas = canvasRef.current;
+      if (!canvas) {
+        throw new Error('Canvas not available');
+      }
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        throw new Error('Canvas context not available');
+      }
+
+      // Set canvas size for vertical video
+      canvas.width = 720;
+      canvas.height = 1280;
+
+      // Create gradient background
+      const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+      gradient.addColorStop(0, '#1a1a2e');
+      gradient.addColorStop(0.5, '#16213e');
+      gradient.addColorStop(1, '#0f0f23');
+      
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Add decorative border
+      ctx.strokeStyle = '#4ECDC4';
+      ctx.lineWidth = 8;
+      ctx.strokeRect(20, 20, canvas.width - 40, canvas.height - 40);
+
+      // Add inner border
+      ctx.strokeStyle = '#FF6B9D';
+      ctx.lineWidth = 4;
+      ctx.strokeRect(40, 40, canvas.width - 80, canvas.height - 80);
+
+      // Add title
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = 'bold 48px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      
+      // Smart text wrapping for video name
+      const maxWidth = canvas.width - 120;
+      const words = videoName.split(' ');
+      const lines: string[] = [];
+      let currentLine = '';
+      
+      for (const word of words) {
+        const testLine = currentLine + (currentLine ? ' ' : '') + word;
+        const metrics = ctx.measureText(testLine);
+        
+        if (metrics.width > maxWidth && currentLine) {
+          lines.push(currentLine);
+          currentLine = word;
+        } else {
+          currentLine = testLine;
+        }
+      }
+      if (currentLine) {
+        lines.push(currentLine);
+      }
+
+      // Draw title lines
+      const lineHeight = 60;
+      const startY = canvas.height / 2 - (lines.length - 1) * lineHeight / 2;
+      
+      lines.forEach((line, index) => {
+        const y = startY + index * lineHeight;
+        
+        // Add text shadow
+        ctx.fillStyle = '#000000';
+        ctx.fillText(line, canvas.width / 2 + 3, y + 3);
+        
+        // Add main text
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillText(line, canvas.width / 2, y);
+      });
+
+      // Add CodeStream branding
+      ctx.font = 'bold 32px Arial';
+      ctx.fillStyle = '#4ECDC4';
+      ctx.fillText('CodeStream', canvas.width / 2, canvas.height - 150);
+      
+      ctx.font = '24px Arial';
+      ctx.fillStyle = '#FF6B9D';
+      ctx.fillText('AI-Powered Code Videos', canvas.width / 2, canvas.height - 100);
+
+      // Add decorative elements
+      ctx.fillStyle = '#4ECDC4';
+      ctx.beginPath();
+      ctx.arc(100, 150, 20, 0, 2 * Math.PI);
+      ctx.fill();
+      
+      ctx.fillStyle = '#FF6B9D';
+      ctx.beginPath();
+      ctx.arc(canvas.width - 100, 150, 15, 0, 2 * Math.PI);
+      ctx.fill();
+      
+      ctx.fillStyle = '#95E1D3';
+      ctx.beginPath();
+      ctx.arc(100, canvas.height - 200, 25, 0, 2 * Math.PI);
+      ctx.fill();
+      
+      ctx.fillStyle = '#FFE66D';
+      ctx.beginPath();
+      ctx.arc(canvas.width - 100, canvas.height - 200, 18, 0, 2 * Math.PI);
+      ctx.fill();
+
+      // Convert canvas to image
+      const dataUrl = canvas.toDataURL('image/png');
+      setThumbnailPreview(dataUrl);
+      
+      // Create image element
+      const img = new Image();
+      img.onload = () => {
+        setThumbnailImage(img);
+        console.log('Generated thumbnail image created successfully');
+      };
+      img.onerror = () => {
+        throw new Error('Failed to create image from canvas');
+      };
+      img.src = dataUrl;
+
+    } catch (error) {
+      console.error('Failed to generate text thumbnail:', error);
+      alert('Failed to generate thumbnail. Please try uploading an image instead.');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  // FIXED: Handle download with proper async handling and error prevention
+  const handleDownloadClick = async (event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    if (isProcessing) return;
+    
+    setIsProcessing(true);
+    
+    try {
+      console.log('Starting download with thumbnail...');
+      await onDownloadWithThumbnail(thumbnailImage);
+      console.log('Download with thumbnail completed');
+      onClose();
+    } catch (error) {
+      console.error('Failed to download with thumbnail:', error);
+      alert('Failed to create video with thumbnail. Please try again.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // FIXED: Handle skip thumbnail with proper event handling
+  const handleSkipThumbnail = async (event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    if (isProcessing) return;
+    
+    setIsProcessing(true);
+    
+    try {
+      console.log('Downloading without thumbnail...');
+      await onDownloadWithThumbnail(null);
+      console.log('Download without thumbnail completed');
+      onClose();
+    } catch (error) {
+      console.error('Failed to download video:', error);
+      alert('Failed to download video. Please try again.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // FIXED: Handle file input click with proper event handling
+  const handleUploadClick = (event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    fileInputRef.current?.click();
+  };
+
+  // FIXED: Handle generate click with proper event handling
+  const handleGenerateClick = async (event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    await generateTextThumbnail();
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/95 backdrop-blur-sm z-[60] flex items-center justify-center p-6">
+      <div className="bg-black border-2 border-white rounded-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+        {/* Header */}
+        <div className="flex items-center justify-between p-6 border-b-2 border-white">
+          <h3 className="text-2xl font-bold text-white flex items-center gap-3">
+            <ImageIcon className="w-6 h-6" />
+            Add Thumbnail
+          </h3>
+          <button
+            onClick={onClose}
+            disabled={isProcessing}
+            className="p-2 hover:bg-white hover:text-black rounded transition-colors border-2 border-white text-white disabled:opacity-50"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Processing Overlay */}
+        {isProcessing && (
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm z-10 flex items-center justify-center rounded-xl">
+            <div className="bg-black border-2 border-white rounded-xl p-8 text-center">
+              <div className="flex items-center justify-center gap-3 mb-4">
+                <Loader2 className="w-8 h-8 text-white animate-spin" />
+                <h4 className="text-2xl font-bold text-white">Processing Video</h4>
+              </div>
+              <p className="text-lg text-gray-300">
+                Creating your video with thumbnail...
+              </p>
+              <p className="text-sm text-gray-400 mt-2">
+                This may take a moment, please don't close this window
+              </p>
+            </div>
+          </div>
+        )}
+
+        <div className="p-6">
+          <p className="text-lg text-gray-300 mb-6">
+            Add a 1-second thumbnail to the beginning of: <span className="text-white font-bold">{videoName}</span>
+          </p>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* Upload Section */}
+            <div className="space-y-4">
+              <h4 className="text-xl font-bold text-white">📤 Upload Custom Image</h4>
+              <div className="border-2 border-dashed border-gray-600 rounded-lg p-8 text-center hover:border-white transition-colors">
+                <Upload className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+                <p className="text-gray-300 mb-4">Upload your own thumbnail image</p>
+                <button
+                  type="button"
+                  onClick={handleUploadClick}
+                  disabled={isProcessing}
+                  className="bg-white hover:bg-gray-200 text-black px-6 py-3 rounded-lg font-bold transition-colors border-2 border-white disabled:opacity-50"
+                >
+                  Choose Image
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  className="hidden"
+                />
+                <p className="text-sm text-gray-400 mt-2">
+                  Supports PNG, JPG, GIF and other image formats
+                </p>
+              </div>
+            </div>
+
+            {/* Generate Section */}
+            <div className="space-y-4">
+              <h4 className="text-xl font-bold text-white">✨ Generate Text Thumbnail</h4>
+              <div className="border-2 border-gray-600 rounded-lg p-8 text-center">
+                <Sparkles className="w-12 h-12 mx-auto mb-4 text-gray-400" />
+                <p className="text-gray-300 mb-4">Create a professional thumbnail with your video name</p>
+                <button
+                  type="button"
+                  onClick={handleGenerateClick}
+                  disabled={isGenerating || isProcessing}
+                  className="bg-white hover:bg-gray-200 text-black px-6 py-3 rounded-lg font-bold transition-colors border-2 border-white disabled:opacity-50 flex items-center gap-2 mx-auto"
+                >
+                  {isGenerating ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-5 h-5" />
+                      Generate Thumbnail
+                    </>
+                  )}
+                </button>
+                <p className="text-sm text-gray-400 mt-2">
+                  Creates a branded thumbnail with CodeStream styling
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Preview Section */}
+          {thumbnailPreview && (
+            <div className="mt-8">
+              <h4 className="text-xl font-bold text-white mb-4">🖼️ Thumbnail Preview</h4>
+              <div className="flex justify-center">
+                <div className="relative">
+                  <img
+                    src={thumbnailPreview}
+                    alt="Thumbnail preview"
+                    className="max-w-xs border-2 border-white rounded-lg"
+                    style={{ aspectRatio: '9/16' }}
+                  />
+                  <div className="absolute top-2 right-2 bg-black/80 text-white px-2 py-1 rounded text-sm font-bold">
+                    1s
+                  </div>
+                </div>
+              </div>
+              <p className="text-center text-gray-400 mt-2">
+                This thumbnail will be shown for 1 second at the beginning of your video
+              </p>
+            </div>
+          )}
+
+          {/* Action Buttons */}
+          <div className="flex gap-4 justify-center mt-8">
+            <button
+              type="button"
+              onClick={handleSkipThumbnail}
+              disabled={isProcessing}
+              className="bg-black hover:bg-white hover:text-black text-white px-6 py-3 rounded-lg font-bold transition-colors border-2 border-white disabled:opacity-50"
+            >
+              Skip Thumbnail
+            </button>
+            <button
+              type="button"
+              onClick={handleDownloadClick}
+              disabled={!thumbnailImage || isProcessing}
+              className="bg-white hover:bg-gray-200 text-black px-6 py-3 rounded-lg font-bold transition-colors border-2 border-white disabled:opacity-50 flex items-center gap-2"
+            >
+              {isProcessing ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <Download className="w-5 h-5" />
+                  Download with Thumbnail
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* Hidden canvas for thumbnail generation */}
+        <canvas ref={canvasRef} className="hidden" />
+      </div>
+    </div>
+  );
+};
 
 // Custom Success Modal Component
 const SuccessModal: React.FC<{
@@ -433,10 +587,9 @@ const UnifiedGallery: React.FC<UnifiedGalleryProps> = ({
     type: 'video' | 'fullclip' | 'shorts';
   }>({ filename: '', type: 'video' });
 
-  // NEW: Thumbnail modal state
+  // FIXED: Thumbnail modal state
   const [showThumbnailModal, setShowThumbnailModal] = useState(false);
   const [videoForThumbnail, setVideoForThumbnail] = useState<ShortsVideoRecord | null>(null);
-  const [isProcessingThumbnail, setIsProcessingThumbnail] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -535,21 +688,8 @@ const UnifiedGallery: React.FC<UnifiedGalleryProps> = ({
     }
   };
 
-  // NEW: Enhanced download function with thumbnail support for Shorts
+  // FIXED: Regular download function for non-Shorts videos
   const handleDownloadVideo = async (video: VideoRecord | FullClipVideoRecord | ShortsVideoRecord) => {
-    // For Shorts videos, show thumbnail modal
-    if (activeTab === 'shorts') {
-      setVideoForThumbnail(video as ShortsVideoRecord);
-      setShowThumbnailModal(true);
-      return;
-    }
-
-    // For other videos, download directly
-    await downloadVideoDirectly(video);
-  };
-
-  // NEW: Direct download function
-  const downloadVideoDirectly = async (video: VideoRecord | FullClipVideoRecord | ShortsVideoRecord) => {
     try {
       const blob = new Blob([video.video_blob], { type: 'video/mp4' });
       
@@ -581,28 +721,36 @@ const UnifiedGallery: React.FC<UnifiedGalleryProps> = ({
     }
   };
 
-  // NEW: Download with thumbnail function
-  const handleDownloadWithThumbnail = async (thumbnailBlob: Blob | null) => {
-    if (!videoForThumbnail) return;
+  // FIXED: Handle Shorts video download with thumbnail option
+  const handleShortsDownload = async (video: ShortsVideoRecord) => {
+    setVideoForThumbnail(video);
+    setShowThumbnailModal(true);
+  };
 
-    setIsProcessingThumbnail(true);
-    
+  // FIXED: Process video with thumbnail
+  const handleDownloadWithThumbnail = async (thumbnailImage: HTMLImageElement | null) => {
+    if (!videoForThumbnail) {
+      throw new Error('No video selected for thumbnail processing');
+    }
+
     try {
-      if (!thumbnailBlob) {
-        // No thumbnail, download directly
-        await downloadVideoDirectly(videoForThumbnail);
+      console.log('Processing video with thumbnail...', { hasThumbnail: !!thumbnailImage });
+
+      if (!thumbnailImage) {
+        // No thumbnail - just download the original video
+        console.log('No thumbnail provided, downloading original video');
+        await handleDownloadVideo(videoForThumbnail);
         return;
       }
 
-      console.log('Creating video with thumbnail...');
-      
-      // Create video element for the original video
+      // Create video element from the Shorts video blob
       const videoBlob = new Blob([videoForThumbnail.video_blob], { type: 'video/mp4' });
       const videoUrl = URL.createObjectURL(videoBlob);
       
       const video = document.createElement('video');
       video.src = videoUrl;
       video.crossOrigin = 'anonymous';
+      video.muted = true; // Mute for processing, audio will be preserved in final output
       
       // Wait for video to load
       await new Promise((resolve, reject) => {
@@ -614,29 +762,33 @@ const UnifiedGallery: React.FC<UnifiedGalleryProps> = ({
         video.load();
       });
 
-      // Create thumbnail image element
-      const thumbnailImg = new Image();
-      await new Promise((resolve, reject) => {
-        thumbnailImg.onload = resolve;
-        thumbnailImg.onerror = reject;
-        thumbnailImg.src = URL.createObjectURL(thumbnailBlob);
-      });
-
       // Set up canvas for rendering
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d')!;
       canvas.width = 720;
       canvas.height = 1280;
 
-      // Set up MediaRecorder
-      const stream = canvas.captureStream(30);
+      // Set up MediaRecorder for the final video
+      const canvasStream = canvas.captureStream(30);
       
+      // Create audio context to preserve original audio
+      const audioContext = new AudioContext();
+      const audioSource = audioContext.createMediaElementSource(video);
+      const audioDestination = audioContext.createMediaStreamDestination();
+      audioSource.connect(audioDestination);
+      
+      // Combine video and audio streams
+      const finalStream = new MediaStream([
+        ...canvasStream.getVideoTracks(),
+        ...audioDestination.stream.getAudioTracks()
+      ]);
+
       let mimeType = 'video/mp4';
       if (MediaRecorder.isTypeSupported('video/mp4;codecs=avc1.42E01E')) {
         mimeType = 'video/mp4;codecs=avc1.42E01E';
       }
 
-      const mediaRecorder = new MediaRecorder(stream, {
+      const mediaRecorder = new MediaRecorder(finalStream, {
         mimeType: mimeType,
         videoBitsPerSecond: 2500000,
         audioBitsPerSecond: 128000
@@ -651,20 +803,20 @@ const UnifiedGallery: React.FC<UnifiedGalleryProps> = ({
       };
 
       mediaRecorder.onstop = async () => {
-        console.log('Recording with thumbnail complete');
+        console.log('Recording stopped, creating final video with thumbnail...');
         
         const finalBlob = new Blob(chunks, { type: 'video/mp4' });
         
-        // Download the video with thumbnail
+        // Create download
         const url = URL.createObjectURL(finalBlob);
         const a = document.createElement('a');
         a.href = url;
         
+        // Add thumbnail indicator to filename
         let filename = videoForThumbnail.filename;
         if (!filename.toLowerCase().endsWith('.mp4')) {
           filename = filename.replace(/\.[^/.]+$/, '') + '.mp4';
         }
-        // Add thumbnail indicator to filename
         filename = filename.replace('.mp4', '-with-thumbnail.mp4');
         
         a.download = filename;
@@ -677,16 +829,22 @@ const UnifiedGallery: React.FC<UnifiedGalleryProps> = ({
         setTimeout(() => {
           URL.revokeObjectURL(url);
           URL.revokeObjectURL(videoUrl);
-          URL.revokeObjectURL(thumbnailImg.src);
+          audioContext.close();
         }, 1000);
+        
+        console.log('Video with thumbnail downloaded successfully');
       };
 
       // Start recording
+      console.log('Starting recording with thumbnail...');
       mediaRecorder.start(100);
       
+      const thumbnailDuration = 1000; // 1 second in milliseconds
+      const totalDuration = (video.duration + 1) * 1000; // Add 1 second for thumbnail
       const startTime = Date.now();
-      const thumbnailDuration = 1000; // 1 second
-      const totalDuration = thumbnailDuration + (video.duration * 1000);
+      
+      // Start video playback (will be delayed by 1 second)
+      video.currentTime = 0;
       
       // Render loop
       const renderFrame = () => {
@@ -698,36 +856,39 @@ const UnifiedGallery: React.FC<UnifiedGalleryProps> = ({
         
         if (elapsed < thumbnailDuration) {
           // Show thumbnail for first second
-          ctx.drawImage(thumbnailImg, 0, 0, canvas.width, canvas.height);
+          ctx.drawImage(thumbnailImage, 0, 0, canvas.width, canvas.height);
         } else {
-          // Show video content
+          // Show video content after thumbnail
           const videoTime = (elapsed - thumbnailDuration) / 1000;
           video.currentTime = videoTime;
           
           if (video.readyState >= 2) {
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
           }
+          
+          // Start video playback if not already playing
+          if (video.paused && videoTime > 0) {
+            video.play().catch(console.error);
+          }
         }
         
-        if (elapsed < totalDuration) {
-          requestAnimationFrame(renderFrame);
-        } else {
+        // Check if we've reached the end
+        if (elapsed >= totalDuration) {
+          console.log('Rendering complete, stopping recording...');
           mediaRecorder.stop();
+          video.pause();
+          return;
         }
+        
+        requestAnimationFrame(renderFrame);
       };
-
+      
       // Start the render loop
       renderFrame();
 
     } catch (error) {
-      console.error('Failed to create video with thumbnail:', error);
-      setError('Failed to create video with thumbnail. Downloading original video instead.');
-      // Fallback to direct download
-      await downloadVideoDirectly(videoForThumbnail);
-    } finally {
-      setIsProcessingThumbnail(false);
-      setShowThumbnailModal(false);
-      setVideoForThumbnail(null);
+      console.error('Failed to process video with thumbnail:', error);
+      throw error;
     }
   };
 
@@ -873,6 +1034,12 @@ Made with CodeStream: https://codestream.app`;
 
   const handleSuccessModalClose = () => {
     setShowSuccessModal(false);
+  };
+
+  // FIXED: Handle thumbnail modal close
+  const handleThumbnailModalClose = () => {
+    setShowThumbnailModal(false);
+    setVideoForThumbnail(null);
   };
 
   const formatDate = (dateString: string) => {
@@ -1074,21 +1241,41 @@ Made with CodeStream: https://codestream.app`;
                   </>
                 )}
 
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDownloadVideo(video);
-                  }}
-                  disabled={deletingVideoId === video.id}
-                  className={`p-2 rounded transition-colors border-2 ${
-                    selectedVideo?.id === video.id 
-                      ? 'border-black text-black hover:bg-black hover:text-white' 
-                      : 'border-white text-white hover:bg-white hover:text-black'
-                  } disabled:opacity-50 disabled:cursor-not-allowed`}
-                  title={activeTab === 'shorts' ? "Download MP4 (with thumbnail option)" : "Download MP4"}
-                >
-                  {activeTab === 'shorts' ? <ImageIcon className="w-5 h-5" /> : <Download className="w-5 h-5" />}
-                </button>
+                {/* FIXED: Different download buttons for Shorts vs other videos */}
+                {activeTab === 'shorts' ? (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleShortsDownload(video as ShortsVideoRecord);
+                    }}
+                    disabled={deletingVideoId === video.id}
+                    className={`p-2 rounded transition-colors border-2 ${
+                      selectedVideo?.id === video.id 
+                        ? 'border-black text-black hover:bg-black hover:text-white' 
+                        : 'border-white text-white hover:bg-white hover:text-black'
+                    } disabled:opacity-50 disabled:cursor-not-allowed`}
+                    title="Download MP4 (with thumbnail option)"
+                  >
+                    <ImageIcon className="w-5 h-5" />
+                  </button>
+                ) : (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDownloadVideo(video);
+                    }}
+                    disabled={deletingVideoId === video.id}
+                    className={`p-2 rounded transition-colors border-2 ${
+                      selectedVideo?.id === video.id 
+                        ? 'border-black text-black hover:bg-black hover:text-white' 
+                        : 'border-white text-white hover:bg-white hover:text-black'
+                    } disabled:opacity-50 disabled:cursor-not-allowed`}
+                    title="Download MP4"
+                  >
+                    <Download className="w-5 h-5" />
+                  </button>
+                )}
+                
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -1135,10 +1322,6 @@ Made with CodeStream: https://codestream.app`;
                   <div className="flex items-center gap-2">
                     <Users className="w-4 h-4" />
                     <span>{(video as ShortsVideoRecord).avatar_type}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Share2 className="w-4 h-4" />
-                    <span>Social Ready</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <ImageIcon className="w-4 h-4" />
@@ -1253,6 +1436,10 @@ Made with CodeStream: https://codestream.app`;
                   <span>Size:</span>
                   <span>{(selectedVideo as ShortsVideoRecord).avatar_size}%</span>
                 </div>
+                <div className="flex justify-between">
+                  <span>Thumbnail:</span>
+                  <span className="text-green-400">✓ Supported</span>
+                </div>
               </div>
             </div>
           )}
@@ -1280,15 +1467,26 @@ Made with CodeStream: https://codestream.app`;
               </button>
             )}
             
-            {/* NEW: Enhanced download button for Shorts */}
-            <button
-              onClick={() => handleDownloadVideo(selectedVideo)}
-              className="bg-black hover:bg-white hover:text-black text-white px-6 py-3 rounded-lg font-bold 
-                       transition-colors border-2 border-white flex items-center gap-2"
-            >
-              {activeTab === 'shorts' ? <ImageIcon className="w-5 h-5" /> : <Download className="w-5 h-5" />}
-              {activeTab === 'shorts' ? 'Download with Thumbnail' : 'Download MP4'}
-            </button>
+            {/* FIXED: Different download buttons for Shorts vs other videos */}
+            {activeTab === 'shorts' ? (
+              <button
+                onClick={() => handleShortsDownload(selectedVideo as ShortsVideoRecord)}
+                className="bg-white hover:bg-gray-200 text-black px-6 py-3 rounded-lg font-bold 
+                         transition-colors border-2 border-white flex items-center gap-2"
+              >
+                <ImageIcon className="w-5 h-5" />
+                Download with Thumbnail
+              </button>
+            ) : (
+              <button
+                onClick={() => handleDownloadVideo(selectedVideo)}
+                className="bg-black hover:bg-white hover:text-black text-white px-6 py-3 rounded-lg font-bold 
+                         transition-colors border-2 border-white flex items-center gap-2"
+              >
+                <Download className="w-5 h-5" />
+                Download MP4
+              </button>
+            )}
           </div>
 
           {/* NEW: Social Media Sharing Section for Shorts */}
@@ -1442,14 +1640,6 @@ Made with CodeStream: https://codestream.app`;
             </div>
           )}
 
-          {/* Processing Overlay for Thumbnail */}
-          {isProcessingThumbnail && (
-            <div className="mx-6 mt-4 bg-black border-2 border-white rounded-lg p-4 flex items-center gap-3">
-              <Loader2 className="w-6 h-6 text-white animate-spin flex-shrink-0" />
-              <span className="text-white font-medium">Creating video with thumbnail...</span>
-            </div>
-          )}
-
           {/* Deleting Overlay */}
           {deletingVideoId && (
             <div className="mx-6 mt-4 bg-black border-2 border-white rounded-lg p-4 flex items-center gap-3">
@@ -1556,13 +1746,10 @@ Made with CodeStream: https://codestream.app`;
         onShortsVideoSaved={handleShortsVideoSaved}
       />
 
-      {/* NEW: Thumbnail Modal */}
+      {/* FIXED: Thumbnail Modal */}
       <ThumbnailModal
         isOpen={showThumbnailModal}
-        onClose={() => {
-          setShowThumbnailModal(false);
-          setVideoForThumbnail(null);
-        }}
+        onClose={handleThumbnailModalClose}
         onDownloadWithThumbnail={handleDownloadWithThumbnail}
         videoName={videoForThumbnail ? getDisplayName(videoForThumbnail) : ''}
       />
