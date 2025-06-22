@@ -283,6 +283,8 @@ Let's begin our journey through this fascinating piece of ${language} code!`;
 
     setIsProcessingVideo(true);
     try {
+      console.log('Starting video-audio combination process...');
+      
       // Create video element for the original video
       const videoBlob = new Blob([selectedVideo.video_blob], { type: 'video/mp4' });
       const videoUrl = URL.createObjectURL(videoBlob);
@@ -290,9 +292,15 @@ Let's begin our journey through this fascinating piece of ${language} code!`;
       const video = document.createElement('video');
       video.src = videoUrl;
       video.muted = true;
+      video.crossOrigin = 'anonymous';
       
-      await new Promise((resolve) => {
-        video.onloadedmetadata = resolve;
+      // Wait for video to load
+      await new Promise((resolve, reject) => {
+        video.onloadedmetadata = () => {
+          console.log('Video loaded:', video.duration, 'seconds');
+          resolve(void 0);
+        };
+        video.onerror = reject;
       });
 
       // Set up canvas for rendering
@@ -304,63 +312,102 @@ Let's begin our journey through this fascinating piece of ${language} code!`;
       // Create audio element
       const audio = document.createElement('audio');
       audio.src = URL.createObjectURL(audioBlob);
+      audio.crossOrigin = 'anonymous';
       
-      await new Promise((resolve) => {
-        audio.onloadedmetadata = resolve;
+      // Wait for audio to load
+      await new Promise((resolve, reject) => {
+        audio.onloadedmetadata = () => {
+          console.log('Audio loaded:', audio.duration, 'seconds');
+          resolve(void 0);
+        };
+        audio.onerror = reject;
       });
 
-      // Set up MediaRecorder for final video with H.264 codec
+      // Determine the final duration (use the longer of video or audio)
+      const finalDuration = Math.max(video.duration, audio.duration);
+      console.log('Final video duration will be:', finalDuration, 'seconds');
+
+      // Set up MediaRecorder with better codec support
       const stream = canvas.captureStream(30);
       
-      // Create audio context and connect audio
-      const audioContext = new AudioContext();
+      // Try different codec options for better compatibility
+      let mimeType = 'video/webm;codecs=vp9,opus';
+      if (MediaRecorder.isTypeSupported('video/mp4;codecs=h264,aac')) {
+        mimeType = 'video/mp4;codecs=h264,aac';
+      } else if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) {
+        mimeType = 'video/webm;codecs=vp8,opus';
+      }
+      
+      console.log('Using codec:', mimeType);
+
+      // Create audio context for mixing
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      
+      // Create audio source and destination
       const audioSource = audioContext.createMediaElementSource(audio);
       const destination = audioContext.createMediaStreamDestination();
-      audioSource.connect(destination);
-      audioSource.connect(audioContext.destination); // Also connect to speakers for monitoring
       
-      // Add audio track to the stream
+      // Connect audio
+      audioSource.connect(destination);
+      
+      // Add audio track to video stream
       const audioTrack = destination.stream.getAudioTracks()[0];
       if (audioTrack) {
         stream.addTrack(audioTrack);
+        console.log('Audio track added to stream');
       }
 
-      // Use H.264 codec for better compatibility
       const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'video/mp4;codecs=h264,aac',
-        videoBitsPerSecond: 5000000, // 5 Mbps for good quality
-        audioBitsPerSecond: 128000   // 128 kbps audio
+        mimeType: mimeType,
+        videoBitsPerSecond: 4000000, // 4 Mbps
+        audioBitsPerSecond: 128000   // 128 kbps
       });
 
       const chunks: Blob[] = [];
+      
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
           chunks.push(event.data);
+          console.log('Recorded chunk:', event.data.size, 'bytes');
         }
       };
 
       mediaRecorder.onstop = async () => {
-        const finalBlob = new Blob(chunks, { type: 'video/mp4' });
+        console.log('Recording stopped, creating final video...');
+        
+        // Create final blob with proper MIME type
+        const finalBlob = new Blob(chunks, { 
+          type: mimeType.includes('mp4') ? 'video/mp4' : 'video/webm'
+        });
+        
+        console.log('Final video size:', finalBlob.size, 'bytes');
         
         // Save to FullClip gallery
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         const filename = `fullclip-${selectedVideo.original_filename.replace(/\.[^/.]+$/, '')}-${timestamp}.mp4`;
         
-        await dbManager.saveFullClipVideo(
-          filename,
-          selectedVideo.original_filename,
-          selectedVideo.file_language,
-          Math.max(selectedVideo.duration, duration),
-          finalBlob,
-          script,
-          captions
-        );
+        try {
+          await dbManager.saveFullClipVideo(
+            filename,
+            selectedVideo.original_filename,
+            selectedVideo.file_language,
+            Math.round(finalDuration),
+            finalBlob,
+            script,
+            captions
+          );
 
-        onAudioVideoSaved();
-        
-        // Close the studio and show success
-        onClose();
-        alert('FullClip video saved successfully! Check the FullClip Gallery to view it.');
+          console.log('FullClip video saved successfully');
+          onAudioVideoSaved();
+          
+          // Close the studio and show success
+          onClose();
+          alert('FullClip video saved successfully! Check the FullClip Gallery to view it.');
+          
+        } catch (saveError) {
+          console.error('Failed to save video:', saveError);
+          alert('Video was created but failed to save to gallery. Please try again.');
+        }
         
         // Cleanup
         URL.revokeObjectURL(videoUrl);
@@ -368,50 +415,89 @@ Let's begin our journey through this fascinating piece of ${language} code!`;
         audioContext.close();
       };
 
+      mediaRecorder.onerror = (event) => {
+        console.error('MediaRecorder error:', event);
+        alert('Recording failed. Please try again.');
+      };
+
       // Start recording
-      mediaRecorder.start(100);
+      console.log('Starting recording...');
+      mediaRecorder.start(100); // Collect data every 100ms
       
-      // Play both video and audio
+      // Reset and start playback
       video.currentTime = 0;
       audio.currentTime = 0;
       
       const startTime = Date.now();
-      const maxDuration = Math.max(video.duration, audio.duration) * 1000;
+      const maxDuration = finalDuration * 1000; // Convert to milliseconds
       
-      video.play();
-      audio.play();
+      // Start playback
+      const playPromises = [video.play(), audio.play()];
+      await Promise.all(playPromises);
+      
+      console.log('Playback started, beginning render loop...');
 
       // Render loop
       const renderFrame = () => {
         const elapsed = Date.now() - startTime;
         const progress = elapsed / maxDuration;
         
-        if (progress >= 1) {
+        // Check if we've reached the end
+        if (progress >= 1 || elapsed >= maxDuration) {
+          console.log('Rendering complete, stopping recording...');
           mediaRecorder.stop();
           video.pause();
           audio.pause();
           return;
         }
 
+        // Clear canvas
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
         // Draw video frame
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        if (video.readyState >= 2) { // HAVE_CURRENT_DATA
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        }
 
         // Draw captions if enabled
-        if (captionsEnabled) {
+        if (captionsEnabled && captions.length > 0) {
+          const currentTimeSeconds = elapsed / 1000;
           const currentCaptions = captions.filter(caption => 
-            elapsed / 1000 >= caption.startTime && elapsed / 1000 <= caption.endTime
+            currentTimeSeconds >= caption.startTime && currentTimeSeconds <= caption.endTime
           );
 
           currentCaptions.forEach(caption => {
             // Set up caption styling
-            ctx.font = 'bold 24px Arial';
+            ctx.font = 'bold 28px Arial';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'bottom';
 
-            const lines = caption.text.split('\n');
-            const lineHeight = 30;
+            // Split text into words for better wrapping
+            const words = caption.text.split(' ');
+            const lines: string[] = [];
+            let currentLine = '';
+            
+            // Simple word wrapping
+            for (const word of words) {
+              const testLine = currentLine + (currentLine ? ' ' : '') + word;
+              const metrics = ctx.measureText(testLine);
+              
+              if (metrics.width > canvas.width - 80 && currentLine) {
+                lines.push(currentLine);
+                currentLine = word;
+              } else {
+                currentLine = testLine;
+              }
+            }
+            if (currentLine) {
+              lines.push(currentLine);
+            }
+
+            // Draw each line
+            const lineHeight = 35;
             const totalHeight = lines.length * lineHeight;
-            const startY = canvas.height - 100; // Position at bottom
+            const startY = canvas.height - 80; // Position at bottom
 
             lines.forEach((line, index) => {
               const y = startY - (lines.length - 1 - index) * lineHeight;
@@ -419,15 +505,15 @@ Let's begin our journey through this fascinating piece of ${language} code!`;
 
               // Measure text for background
               const textWidth = ctx.measureText(line).width;
-              const padding = 20;
+              const padding = 15;
 
-              // Draw background
-              ctx.fillStyle = captionBackgroundColor + 'CC'; // Add transparency
+              // Draw background with transparency
+              ctx.fillStyle = captionBackgroundColor + 'E6'; // 90% opacity
               ctx.fillRect(
                 x - textWidth / 2 - padding,
-                y - 24 - 5,
+                y - 30,
                 textWidth + padding * 2,
-                lineHeight
+                lineHeight + 5
               );
 
               // Draw text
@@ -440,11 +526,12 @@ Let's begin our journey through this fascinating piece of ${language} code!`;
         requestAnimationFrame(renderFrame);
       };
 
+      // Start the render loop
       renderFrame();
 
     } catch (error) {
       console.error('Failed to combine video with audio:', error);
-      alert('Failed to combine video with audio. Please try again.');
+      alert(`Failed to combine video with audio: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsProcessingVideo(false);
     }
@@ -665,7 +752,7 @@ Let's begin our journey through this fascinating piece of ${language} code!`;
                       <div 
                         className="p-2 rounded text-center"
                         style={{ 
-                          backgroundColor: captionBackgroundColor + 'CC',
+                          backgroundColor: captionBackgroundColor + 'E6',
                           color: captionTextColor 
                         }}
                       >
