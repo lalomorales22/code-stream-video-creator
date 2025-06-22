@@ -178,35 +178,39 @@ const AudioStudio: React.FC<AudioStudioProps> = ({
 
       setProcessingProgress('Generating script with AI...');
 
+      // IMPROVED: More precise word count calculation for exact timing
+      const targetWords = Math.round((duration * 150) / 60); // 150 words per minute
+      const maxWords = Math.min(targetWords + 10, Math.max(50, targetWords)); // Allow small buffer but enforce limits
+
       // Create a comprehensive prompt for Grok with actual file analysis
-      const systemPrompt = `You are an expert programming instructor creating engaging narration scripts for code demonstration videos. You will analyze the actual code content and create natural, conversational commentary that explains what viewers are seeing as the code streams across the screen.`;
+      const systemPrompt = `You are a friendly developer creating casual, educational commentary for code videos. Write naturally as if explaining code to a friend - be conversational, not robotic or overly formal. Focus on what makes this specific code interesting.`;
 
-      const userPrompt = `Create a natural ${duration}-second narration script for a code streaming video:
+      const userPrompt = `Create a natural ${duration}-second script (exactly ${targetWords} words) for this code:
 
-**Video Details:**
-- File: ${filename}
-- Language: ${language}
-- Duration: ${duration} seconds
-- Actual Code Content:
+**File:** ${filename} (${language})
+**Target:** ${targetWords} words (${duration} seconds at normal speaking pace)
+
+**Code:**
 \`\`\`${language}
-${originalFileContent}
+${originalFileContent.substring(0, 2000)}${originalFileContent.length > 2000 ? '...' : ''}
 \`\`\`
 
-**Requirements:**
-- Script should take approximately ${duration} seconds to read aloud (aim for ~150 words per minute)
-- Write in a natural, conversational tone as if explaining to a fellow developer
-- Reference the ACTUAL code elements you see in the content above
-- Explain what this specific code does, not generic ${language} concepts
-- Point out interesting patterns, functions, variables, or techniques in THIS code
-- Make it engaging for developers who want to understand this specific implementation
-- Flow naturally from start to finish without section breaks
-- Start with what makes this particular code interesting or useful
-- End with a key insight about this specific implementation
-- Keep it suitable for social media (TikTok, Instagram, YouTube Shorts)
-- Be specific about the code shown - mention actual function names, variables, or patterns you see
-- CRITICAL: Keep the script concise to fit exactly ${duration} seconds when read at normal speaking pace
+**Style Guidelines:**
+- Write like you're casually explaining to a fellow developer
+- Be conversational and natural, not robotic or overly professional
+- Reference actual elements from the code (function names, variables, patterns)
+- Explain what this specific code does, not generic concepts
+- Keep it engaging but educational
+- Perfect for social media (TikTok, Instagram, YouTube Shorts)
 
-Create ONLY the natural script text that directly describes and explains the code content shown above. Write it as you would speak it naturally, focusing on what developers would actually see streaming in this ${filename} file.`;
+**Critical Requirements:**
+- EXACTLY ${targetWords} words (±5 words max)
+- Natural speaking rhythm that takes ${duration} seconds
+- Start with what makes this code interesting
+- End with a key insight about this implementation
+- Be specific about what viewers see in THIS code
+
+Write ONLY the script text in a natural, conversational tone that fits exactly ${duration} seconds when spoken normally.`;
 
       const response = await fetch('https://api.x.ai/v1/chat/completions', {
         method: 'POST',
@@ -226,7 +230,7 @@ Create ONLY the natural script text that directly describes and explains the cod
               content: userPrompt
             }
           ],
-          max_tokens: Math.min(1000, Math.max(200, duration * 8)), // Adjust max tokens based on duration
+          max_tokens: Math.min(800, Math.max(200, targetWords * 2)), // More precise token limit
           temperature: 0.7
         })
       });
@@ -244,7 +248,14 @@ Create ONLY the natural script text that directly describes and explains the cod
       }
 
       console.log('AI script generated successfully based on actual file content');
-      setScript(generatedScript.trim());
+      
+      // Trim and validate word count
+      const finalScript = generatedScript.trim();
+      const wordCount = finalScript.split(/\s+/).length;
+      
+      console.log(`Generated script: ${wordCount} words (target: ${targetWords})`);
+      
+      setScript(finalScript);
 
     } catch (error) {
       console.error('Failed to generate AI script:', error);
@@ -828,9 +839,9 @@ Create ONLY the natural script text that directly describes and explains the cod
                     Target: {selectedVideo?.duration || 0} seconds
                   </p>
                 </div>
-                {script && Math.abs(estimateReadingTime(script) - (selectedVideo?.duration || 0)) > 5 && (
+                {script && Math.abs(estimateReadingTime(script) - (selectedVideo?.duration || 0)) > 3 && (
                   <p className="text-yellow-400 text-sm mt-1">
-                    ⚠️ Script duration doesn't match video duration. Consider adjusting.
+                    ⚠️ Script duration doesn't match video duration. Consider regenerating.
                   </p>
                 )}
               </div>

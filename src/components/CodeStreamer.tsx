@@ -75,7 +75,7 @@ const CodeStreamer = forwardRef<HTMLDivElement, CodeStreamerProps>(
       }
     }, [file]);
 
-    // Handle streaming control - ULTRA FAST: Extreme speed enhancement
+    // Handle streaming control - ULTRA FAST: Slightly reduced ludicrous speed
     useEffect(() => {
       if (!file) return;
 
@@ -86,31 +86,26 @@ const CodeStreamer = forwardRef<HTMLDivElement, CodeStreamerProps>(
       }
 
       if (isStreaming && !isPaused) {
-        // ULTRA FAST: New extreme speed calculation
-        // Speed 1-100 now maps to extremely fast intervals
-        // Speed 100 = 0.5ms interval with massive character chunks
-        // Speed 90+ = Multiple lines at once
-        // Speed 80+ = Multiple words at once
-        // Speed 50+ = Multiple characters at once
-        
+        // ULTRA FAST: Slightly reduced extreme speed calculation
+        // Speed 1-100 now maps to very fast intervals with slightly reduced ludicrous mode
         let streamingSpeed: number;
         let charactersPerInterval: number;
         
         if (speed >= 95) {
-          // LUDICROUS SPEED: Entire lines at once
-          streamingSpeed = 1;
-          charactersPerInterval = Math.max(50, Math.floor(file.content.length / 100)); // Entire file in ~100 intervals
+          // LUDICROUS SPEED: Slightly reduced - large chunks but not entire lines
+          streamingSpeed = 2; // Slightly slower than before
+          charactersPerInterval = Math.max(30, Math.floor(file.content.length / 150)); // Reduced from /100
         } else if (speed >= 90) {
           // EXTREME SPEED: Multiple lines
-          streamingSpeed = 2;
-          charactersPerInterval = Math.max(30, Math.floor(file.content.length / 200));
+          streamingSpeed = 3; // Slightly slower
+          charactersPerInterval = Math.max(25, Math.floor(file.content.length / 200));
         } else if (speed >= 80) {
           // VERY FAST: Multiple words
-          streamingSpeed = 3;
+          streamingSpeed = 4; // Slightly slower
           charactersPerInterval = Math.max(15, Math.floor(speed / 5));
         } else if (speed >= 60) {
           // FAST: Multiple characters
-          streamingSpeed = Math.max(1, 10 - Math.floor(speed / 10));
+          streamingSpeed = Math.max(2, 12 - Math.floor(speed / 10));
           charactersPerInterval = Math.max(5, Math.floor(speed / 10));
         } else if (speed >= 40) {
           // MEDIUM FAST: Few characters
