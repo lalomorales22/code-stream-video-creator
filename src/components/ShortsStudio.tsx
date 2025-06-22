@@ -156,7 +156,71 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
     }
   }, [xaiApiKey]);
 
-  // FIXED: Updated generateCustomAvatar function with correct API parameters
+  // FIXED: Helper function to download image and convert to data URL
+  const downloadImageAsDataUrl = async (imageUrl: string): Promise<string> => {
+    try {
+      console.log('Downloading image from:', imageUrl);
+      
+      // Use a proxy approach or fetch with no-cors mode
+      const response = await fetch(imageUrl, {
+        mode: 'cors',
+        headers: {
+          'Accept': 'image/*',
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch image: ${response.status}`);
+      }
+      
+      const blob = await response.blob();
+      console.log('Image downloaded, size:', blob.size, 'bytes');
+      
+      // Convert blob to data URL
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    } catch (error) {
+      console.error('Failed to download image:', error);
+      
+      // Fallback: try to load image directly and convert to canvas
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        
+        img.onload = () => {
+          try {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            canvas.width = img.width;
+            canvas.height = img.height;
+            
+            ctx?.drawImage(img, 0, 0);
+            
+            const dataUrl = canvas.toDataURL('image/png');
+            console.log('Image converted to data URL via canvas');
+            resolve(dataUrl);
+          } catch (canvasError) {
+            console.error('Canvas conversion failed:', canvasError);
+            reject(canvasError);
+          }
+        };
+        
+        img.onerror = () => {
+          console.error('Failed to load image for canvas conversion');
+          reject(new Error('Failed to load image'));
+        };
+        
+        img.src = imageUrl;
+      });
+    }
+  };
+
+  // FIXED: Updated generateCustomAvatar function with CORS fix
   const generateCustomAvatar = async () => {
     if (!xaiApiKey || !customAvatarPrompt.trim()) {
       alert('Please provide XAI API key and avatar description.');
@@ -218,12 +282,17 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
 
       console.log('Custom penguin avatar generated successfully:', imageUrl);
       
-      // Create new avatar object
+      // FIXED: Download and convert image to data URL to avoid CORS issues
+      setProcessingProgress('Downloading generated image...');
+      const dataUrl = await downloadImageAsDataUrl(imageUrl);
+      console.log('Image converted to data URL successfully');
+      
+      // Create new avatar object with data URL
       const newAvatar: PenguinAvatar = {
         id: `custom-${Date.now()}`,
         name: 'Custom Penguin',
         description: customAvatarPrompt,
-        imageUrl: imageUrl
+        imageUrl: dataUrl // Use data URL instead of external URL
       };
 
       setGeneratedAvatars(prev => [...prev, newAvatar]);
@@ -390,15 +459,29 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
         video.load();
       });
 
-      // Load avatar image
+      // Load avatar image with CORS handling
       setProcessingProgress('Loading avatar...');
       const avatarImg = new Image();
-      avatarImg.crossOrigin = 'anonymous';
+      
+      // FIXED: Handle both data URLs and regular URLs
+      if (selectedAvatar.imageUrl.startsWith('data:')) {
+        // Data URL - can be used directly
+        avatarImg.src = selectedAvatar.imageUrl;
+      } else {
+        // External URL - try to load with CORS
+        avatarImg.crossOrigin = 'anonymous';
+        avatarImg.src = selectedAvatar.imageUrl;
+      }
       
       await new Promise((resolve, reject) => {
-        avatarImg.onload = resolve;
-        avatarImg.onerror = reject;
-        avatarImg.src = selectedAvatar.imageUrl;
+        avatarImg.onload = () => {
+          console.log('Avatar image loaded successfully');
+          resolve(void 0);
+        };
+        avatarImg.onerror = (error) => {
+          console.error('Failed to load avatar image:', error);
+          reject(new Error('Failed to load avatar image - CORS or network issue'));
+        };
       });
 
       // Set up canvas for rendering
