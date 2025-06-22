@@ -5,6 +5,7 @@ import CodeStreamer from './components/CodeStreamer';
 import ControlPanel from './components/ControlPanel';
 import VideoGallery from './components/VideoGallery';
 import FullClipGallery from './components/FullClipGallery';
+import ShortsGallery from './components/ShortsGallery';
 import ColorCustomizer, { ColorScheme } from './components/ColorCustomizer';
 
 export interface FileData {
@@ -36,6 +37,7 @@ function App() {
   const [isRecording, setIsRecording] = useState(false);
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
   const [isFullClipGalleryOpen, setIsFullClipGalleryOpen] = useState(false);
+  const [isShortsGalleryOpen, setIsShortsGalleryOpen] = useState(false);
   const [isColorCustomizerOpen, setIsColorCustomizerOpen] = useState(false);
   const [colorScheme, setColorScheme] = useState<ColorScheme>(defaultColorScheme);
   const [pendingVideo, setPendingVideo] = useState<{
@@ -48,6 +50,18 @@ function App() {
   } | null>(null);
   const videoRef = useRef<HTMLDivElement>(null);
   const codeStreamerRef = useRef<any>(null);
+
+  // Listen for Shorts Gallery open event
+  React.useEffect(() => {
+    const handleOpenShortsGallery = () => {
+      setIsShortsGalleryOpen(true);
+    };
+
+    window.addEventListener('openShortsGallery', handleOpenShortsGallery);
+    return () => {
+      window.removeEventListener('openShortsGallery', handleOpenShortsGallery);
+    };
+  }, []);
 
   const handleFilesUploaded = (uploadedFiles: FileData[]) => {
     setFiles(prev => [...prev, ...uploadedFiles]);
@@ -117,6 +131,14 @@ function App() {
 
   const handleCloseFullClipGallery = () => {
     setIsFullClipGalleryOpen(false);
+  };
+
+  const handleOpenShortsGallery = () => {
+    setIsShortsGalleryOpen(true);
+  };
+
+  const handleCloseShortsGallery = () => {
+    setIsShortsGalleryOpen(false);
   };
 
   const handleColorSchemeChange = (newColorScheme: ColorScheme) => {
@@ -189,6 +211,7 @@ function App() {
               onResetStream={handleResetStream}
               selectedFile={selectedFile}
               onOpenFullClipGallery={handleOpenFullClipGallery}
+              onOpenShortsGallery={handleOpenShortsGallery}
             />
           </div>
         </div>
@@ -240,6 +263,12 @@ function App() {
       <FullClipGallery
         isOpen={isFullClipGalleryOpen}
         onClose={handleCloseFullClipGallery}
+      />
+
+      {/* Shorts Gallery Modal */}
+      <ShortsGallery
+        isOpen={isShortsGalleryOpen}
+        onClose={handleCloseShortsGallery}
       />
     </div>
   );

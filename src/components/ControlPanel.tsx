@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Pause, Square, Film, Settings, Zap, Clock, GalleryVertical as Gallery, RotateCcw, FileAudio } from 'lucide-react';
+import { Play, Pause, Square, Film, Settings, Zap, Clock, GalleryVertical as Gallery, RotateCcw, FileAudio, Users } from 'lucide-react';
 import { FileData } from '../App';
 
 interface ControlPanelProps {
@@ -13,6 +13,7 @@ interface ControlPanelProps {
   onResetStream: () => void;
   selectedFile: FileData | null;
   onOpenFullClipGallery?: () => void;
+  onOpenShortsGallery?: () => void;
 }
 
 const ControlPanel: React.FC<ControlPanelProps> = ({
@@ -25,7 +26,8 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
   onOpenGallery,
   onResetStream,
   selectedFile,
-  onOpenFullClipGallery
+  onOpenFullClipGallery,
+  onOpenShortsGallery
 }) => {
   // Calculate estimated duration with new ultra-fast algorithm
   const calculateEstimatedDuration = (fileLength: number, speed: number): string => {
@@ -209,7 +211,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
             {isRecording ? 'Stop Recording' : 'Start Recording'}
           </button>
 
-          {/* UPDATED: Gallery buttons */}
+          {/* UPDATED: Gallery buttons with Shorts Gallery */}
           <div className="grid grid-cols-1 gap-3">
             <button
               onClick={onOpenGallery}
@@ -227,6 +229,15 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
             >
               <FileAudio className="w-5 h-5" />
               FullClip Gallery
+            </button>
+
+            <button
+              onClick={onOpenShortsGallery}
+              className="w-full flex items-center justify-center gap-3 py-3 px-6 rounded-lg font-bold text-lg
+                       bg-black border-2 border-white text-white hover:bg-white hover:text-black transition-all duration-200"
+            >
+              <Users className="w-5 h-5" />
+              Shorts Gallery
             </button>
           </div>
         </div>

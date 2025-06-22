@@ -24,6 +24,20 @@ export interface FullClipVideoRecord {
   original_file_content: string;
 }
 
+export interface ShortsVideoRecord {
+  id: number;
+  filename: string;
+  original_filename: string;
+  file_language: string;
+  duration: number;
+  created_at: string;
+  video_blob: Uint8Array;
+  avatar_type: string;
+  avatar_position: string;
+  avatar_size: number;
+  original_file_content: string;
+}
+
 class DatabaseManager {
   private db: any = null;
   private SQL: any = null;
@@ -134,8 +148,26 @@ class DatabaseManager {
         }
       }
 
+      // New Shorts videos table for videos with avatars
+      const createShortsVideosTableSQL = `
+        CREATE TABLE IF NOT EXISTS shorts_videos (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          filename TEXT NOT NULL,
+          original_filename TEXT NOT NULL,
+          file_language TEXT NOT NULL,
+          duration INTEGER NOT NULL,
+          created_at TEXT NOT NULL,
+          video_blob BLOB NOT NULL,
+          avatar_type TEXT NOT NULL,
+          avatar_position TEXT NOT NULL,
+          avatar_size INTEGER NOT NULL,
+          original_file_content TEXT
+        );
+      `;
+
       this.db.run(createVideosTableSQL);
       this.db.run(createFullClipVideosTableSQL);
+      this.db.run(createShortsVideosTableSQL);
       console.log('Tables created/verified successfully');
       this.saveDatabase();
     } catch (error) {
@@ -477,11 +509,154 @@ class DatabaseManager {
     }
   }
 
+  // Shorts video methods (videos with avatars)
+  async saveShortsVideo(
+    filename: string,
+    originalFilename: string,
+    language: string,
+    duration: number,
+    videoBlob: Blob,
+    avatarType: string,
+    avatarPosition: string,
+    avatarSize: number,
+    originalFileContent: string = ''
+  ): Promise<number> {
+    try {
+      await this.initialize();
+      console.log('Saving Shorts video:', { filename, originalFilename, language, duration, blobSize: videoBlob.size });
+
+      const arrayBuffer = await videoBlob.arrayBuffer();
+      const uint8Array = new Uint8Array(arrayBuffer);
+      const createdAt = new Date().toISOString();
+
+      console.log('Shorts video blob converted to Uint8Array, size:', uint8Array.length);
+
+      const stmt = this.db.prepare(`
+        INSERT INTO shorts_videos (filename, original_filename, file_language, duration, created_at, video_blob, avatar_type, avatar_position, avatar_size, original_file_content)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      stmt.run([filename, originalFilename, language, duration, createdAt, uint8Array, avatarType, avatarPosition, avatarSize, originalFileContent]);
+      
+      // Get the inserted ID
+      const result = this.db.exec("SELECT last_insert_rowid()");
+      const videoId = result[0].values[0][0];
+
+      stmt.free();
+      await this.saveDatabase();
+
+      console.log('Shorts video saved successfully with ID:', videoId);
+      return videoId;
+    } catch (error) {
+      console.error('Failed to save Shorts video:', error);
+      throw error;
+    }
+  }
+
+  async getAllShortsVideos(): Promise<ShortsVideoRecord[]> {
+    try {
+      await this.initialize();
+      console.log('Loading all Shorts videos...');
+
+      const result = this.db.exec(`
+        SELECT id, filename, original_filename, file_language, duration, created_at, video_blob, avatar_type, avatar_position, avatar_size, original_file_content
+        FROM shorts_videos
+        ORDER BY created_at DESC
+      `);
+
+      if (!result || result.length === 0) {
+        console.log('No Shorts videos found in database');
+        return [];
+      }
+
+      const videos: ShortsVideoRecord[] = [];
+      const values = result[0].values;
+
+      for (const row of values) {
+        const video: ShortsVideoRecord = {
+          id: row[0] as number,
+          filename: row[1] as string,
+          original_filename: row[2] as string,
+          file_language: row[3] as string,
+          duration: row[4] as number,
+          created_at: row[5] as string,
+          video_blob: row[6] as Uint8Array,
+          avatar_type: row[7] as string,
+          avatar_position: row[8] as string,
+          avatar_size: row[9] as number,
+          original_file_content: (row[10] as string) || ''
+        };
+        videos.push(video);
+      }
+
+      console.log('Loaded', videos.length, 'Shorts videos from database');
+      return videos;
+    } catch (error) {
+      console.error('Failed to load Shorts videos:', error);
+      return [];
+    }
+  }
+
+  async getShortsVideo(id: number): Promise<ShortsVideoRecord | null> {
+    try {
+      await this.initialize();
+
+      const result = this.db.exec(`
+        SELECT id, filename, original_filename, file_language, duration, created_at, video_blob, avatar_type, avatar_position, avatar_size, original_file_content
+        FROM shorts_videos
+        WHERE id = ?
+      `, [id]);
+
+      if (!result || result.length === 0 || result[0].values.length === 0) {
+        return null;
+      }
+
+      const row = result[0].values[0];
+      const video: ShortsVideoRecord = {
+        id: row[0] as number,
+        filename: row[1] as string,
+        original_filename: row[2] as string,
+        file_language: row[3] as string,
+        duration: row[4] as number,
+        created_at: row[5] as string,
+        video_blob: row[6] as Uint8Array,
+        avatar_type: row[7] as string,
+        avatar_position: row[8] as string,
+        avatar_size: row[9] as number,
+        original_file_content: (row[10] as string) || ''
+      };
+
+      return video;
+    } catch (error) {
+      console.error('Failed to get Shorts video:', error);
+      return null;
+    }
+  }
+
+  async deleteShortsVideo(id: number): Promise<boolean> {
+    try {
+      await this.initialize();
+      console.log('Deleting Shorts video with ID:', id);
+
+      this.db.run('DELETE FROM shorts_videos WHERE id = ?', [id]);
+      const changes = this.db.getRowsModified();
+      
+      await this.saveDatabase();
+      console.log('Shorts video deleted, rows affected:', changes);
+
+      return changes > 0;
+    } catch (error) {
+      console.error('Failed to delete Shorts video:', error);
+      return false;
+    }
+  }
+
   async clearAllVideos(): Promise<void> {
     try {
       await this.initialize();
       this.db.run('DELETE FROM videos');
       this.db.run('DELETE FROM fullclip_videos');
+      this.db.run('DELETE FROM shorts_videos');
       await this.saveDatabase();
       console.log('All videos cleared from database');
     } catch (error) {
@@ -491,7 +666,7 @@ class DatabaseManager {
   }
 
   // Debug method to check database status
-  async getStats(): Promise<{ videoCount: number; fullClipCount: number; dbSize: number }> {
+  async getStats(): Promise<{ videoCount: number; fullClipCount: number; shortsCount: number; dbSize: number }> {
     try {
       await this.initialize();
       
@@ -500,6 +675,9 @@ class DatabaseManager {
       
       const fullClipCountResult = this.db.exec('SELECT COUNT(*) FROM fullclip_videos');
       const fullClipCount = fullClipCountResult[0]?.values[0]?.[0] || 0;
+      
+      const shortsCountResult = this.db.exec('SELECT COUNT(*) FROM shorts_videos');
+      const shortsCount = shortsCountResult[0]?.values[0]?.[0] || 0;
       
       // Get database size from IndexedDB
       let dbSize = 0;
@@ -510,10 +688,10 @@ class DatabaseManager {
         console.warn('Could not get database size:', error);
       }
       
-      return { videoCount, fullClipCount, dbSize };
+      return { videoCount, fullClipCount, shortsCount, dbSize };
     } catch (error) {
       console.error('Failed to get stats:', error);
-      return { videoCount: 0, fullClipCount: 0, dbSize: 0 };
+      return { videoCount: 0, fullClipCount: 0, shortsCount: 0, dbSize: 0 };
     }
   }
 }
