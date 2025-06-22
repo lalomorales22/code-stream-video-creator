@@ -27,6 +27,42 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
   selectedFile,
   onOpenFullClipGallery
 }) => {
+  // Calculate estimated duration with new ultra-fast algorithm
+  const calculateEstimatedDuration = (fileLength: number, speed: number): string => {
+    if (!fileLength) return '0s';
+    
+    let estimatedSeconds: number;
+    
+    if (speed >= 95) {
+      // LUDICROUS SPEED: Entire file in ~10-20 seconds
+      estimatedSeconds = Math.max(10, fileLength / 1000);
+    } else if (speed >= 90) {
+      // EXTREME SPEED: ~20-40 seconds
+      estimatedSeconds = Math.max(15, fileLength / 500);
+    } else if (speed >= 80) {
+      // VERY FAST: ~30-60 seconds
+      estimatedSeconds = Math.max(20, fileLength / 200);
+    } else if (speed >= 60) {
+      // FAST: ~1-2 minutes
+      estimatedSeconds = Math.max(30, fileLength / 100);
+    } else if (speed >= 40) {
+      // MEDIUM FAST: ~2-4 minutes
+      estimatedSeconds = Math.max(60, fileLength / 50);
+    } else {
+      // NORMAL: Traditional calculation
+      estimatedSeconds = Math.max(120, fileLength / (speed / 10));
+    }
+    
+    const minutes = Math.floor(estimatedSeconds / 60);
+    const seconds = Math.round(estimatedSeconds % 60);
+    
+    if (minutes > 0) {
+      return `~${minutes}m ${seconds}s`;
+    } else {
+      return `~${seconds}s`;
+    }
+  };
+
   return (
     <div className="bg-black border-2 border-white rounded-xl p-6">
       <div className="flex items-center gap-3 mb-8">
@@ -89,7 +125,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
         </div>
       </div>
 
-      {/* Speed Control - ENHANCED: Much faster speeds */}
+      {/* Speed Control - ULTRA FAST: Extreme speed enhancement */}
       <div className="mb-10">
         <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-3">
           <div className="p-1 border-2 border-white rounded">
@@ -102,7 +138,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
           <div className="flex items-center justify-between text-lg font-bold">
             <span className="text-gray-400">Slow</span>
             <span className="text-white bg-black border-2 border-white px-4 py-2 rounded">{speed}%</span>
-            <span className="text-gray-400">Ultra Fast</span>
+            <span className="text-gray-400">LUDICROUS</span>
           </div>
           
           <input
@@ -118,16 +154,32 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
           />
           
           <div className="flex justify-between text-sm text-gray-400 font-medium">
-            <span>Detailed View</span>
-            <span>Lightning Fast</span>
+            <span>Detailed</span>
+            <span>EXTREME</span>
           </div>
           
-          {/* Speed indicators */}
-          <div className="text-xs text-gray-400 text-center">
-            {speed <= 20 && "Perfect for tutorials and detailed explanations"}
-            {speed > 20 && speed <= 50 && "Good balance of speed and readability"}
-            {speed > 50 && speed <= 80 && "Fast preview mode"}
-            {speed > 80 && "Ultra-fast for large files - entire file in ~1 minute"}
+          {/* Enhanced speed indicators with ultra-fast descriptions */}
+          <div className="text-xs text-gray-400 text-center font-medium">
+            {speed <= 20 && "📚 Perfect for tutorials and detailed explanations"}
+            {speed > 20 && speed <= 40 && "⚡ Good balance of speed and readability"}
+            {speed > 40 && speed <= 60 && "🚀 Fast preview mode"}
+            {speed > 60 && speed <= 80 && "💨 Very fast - multiple characters at once"}
+            {speed > 80 && speed <= 90 && "🔥 Ultra-fast - entire words at once"}
+            {speed > 90 && speed <= 95 && "⚡⚡ EXTREME - multiple lines at once"}
+            {speed > 95 && "🚀🚀 LUDICROUS SPEED - entire file in seconds!"}
+          </div>
+          
+          {/* Speed performance indicator */}
+          <div className="bg-black border-2 border-white rounded p-3">
+            <div className="text-xs text-white font-bold mb-1">Performance Mode:</div>
+            <div className="text-xs text-gray-300">
+              {speed >= 95 && "🔥 LUDICROUS: Streaming entire lines instantly"}
+              {speed >= 90 && speed < 95 && "⚡ EXTREME: Multiple lines per second"}
+              {speed >= 80 && speed < 90 && "🚀 ULTRA: Multiple words per interval"}
+              {speed >= 60 && speed < 80 && "💨 FAST: Multiple characters per interval"}
+              {speed >= 40 && speed < 60 && "⚡ QUICK: Enhanced character streaming"}
+              {speed < 40 && "📖 NORMAL: Single character streaming"}
+            </div>
           </div>
         </div>
       </div>
@@ -210,12 +262,19 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
             <div className="flex justify-between items-center">
               <span className="text-gray-400 font-medium">Est. Duration:</span>
               <span className="text-white font-bold">
-                {speed >= 80 
-                  ? `~${Math.round(selectedFile.content.length / (speed * 5))}s` 
-                  : `~${Math.round(selectedFile.content.length / (speed / 10))}s`
-                }
+                {calculateEstimatedDuration(selectedFile.content.length, speed)}
               </span>
             </div>
+            
+            {/* Speed performance indicator for current file */}
+            {speed >= 80 && (
+              <div className="mt-4 p-3 bg-gray-800 rounded border border-gray-600">
+                <div className="text-xs text-yellow-400 font-bold mb-1">⚡ ULTRA-FAST MODE ACTIVE</div>
+                <div className="text-xs text-gray-300">
+                  Large files will stream in under 1 minute at this speed!
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           <p className="text-gray-400 text-lg font-medium">No file selected</p>

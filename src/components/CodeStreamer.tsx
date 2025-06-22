@@ -75,7 +75,7 @@ const CodeStreamer = forwardRef<HTMLDivElement, CodeStreamerProps>(
       }
     }, [file]);
 
-    // Handle streaming control - ENHANCED: Much faster speeds
+    // Handle streaming control - ULTRA FAST: Extreme speed enhancement
     useEffect(() => {
       if (!file) return;
 
@@ -86,17 +86,43 @@ const CodeStreamer = forwardRef<HTMLDivElement, CodeStreamerProps>(
       }
 
       if (isStreaming && !isPaused) {
-        // ENHANCED: New speed calculation for much faster streaming
-        // Speed 1-100 now maps to much faster intervals
-        // Speed 100 = 1ms interval (extremely fast)
-        // Speed 50 = 10ms interval (very fast)
-        // Speed 1 = 200ms interval (slow)
-        const streamingSpeed = Math.max(1, Math.round(201 - (speed * 2)));
+        // ULTRA FAST: New extreme speed calculation
+        // Speed 1-100 now maps to extremely fast intervals
+        // Speed 100 = 0.5ms interval with massive character chunks
+        // Speed 90+ = Multiple lines at once
+        // Speed 80+ = Multiple words at once
+        // Speed 50+ = Multiple characters at once
         
-        // For very high speeds (80+), stream multiple characters at once
-        const charactersPerInterval = speed >= 80 ? Math.floor(speed / 20) : 1;
+        let streamingSpeed: number;
+        let charactersPerInterval: number;
         
-        console.log(`Streaming at speed ${speed}: ${streamingSpeed}ms interval, ${charactersPerInterval} chars per interval`);
+        if (speed >= 95) {
+          // LUDICROUS SPEED: Entire lines at once
+          streamingSpeed = 1;
+          charactersPerInterval = Math.max(50, Math.floor(file.content.length / 100)); // Entire file in ~100 intervals
+        } else if (speed >= 90) {
+          // EXTREME SPEED: Multiple lines
+          streamingSpeed = 2;
+          charactersPerInterval = Math.max(30, Math.floor(file.content.length / 200));
+        } else if (speed >= 80) {
+          // VERY FAST: Multiple words
+          streamingSpeed = 3;
+          charactersPerInterval = Math.max(15, Math.floor(speed / 5));
+        } else if (speed >= 60) {
+          // FAST: Multiple characters
+          streamingSpeed = Math.max(1, 10 - Math.floor(speed / 10));
+          charactersPerInterval = Math.max(5, Math.floor(speed / 10));
+        } else if (speed >= 40) {
+          // MEDIUM FAST: Few characters
+          streamingSpeed = Math.max(5, 50 - speed);
+          charactersPerInterval = Math.max(2, Math.floor(speed / 20));
+        } else {
+          // NORMAL: Single characters
+          streamingSpeed = Math.max(10, 150 - (speed * 3));
+          charactersPerInterval = 1;
+        }
+        
+        console.log(`ULTRA FAST Streaming at speed ${speed}: ${streamingSpeed}ms interval, ${charactersPerInterval} chars per interval`);
         
         intervalRef.current = setInterval(() => {
           setCurrentIndex(prevIndex => {
