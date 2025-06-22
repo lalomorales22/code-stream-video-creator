@@ -4,6 +4,7 @@ import FileManager from './components/FileManager';
 import CodeStreamer from './components/CodeStreamer';
 import ControlPanel from './components/ControlPanel';
 import VideoGallery from './components/VideoGallery';
+import FullClipGallery from './components/FullClipGallery';
 import ColorCustomizer, { ColorScheme } from './components/ColorCustomizer';
 
 export interface FileData {
@@ -34,6 +35,7 @@ function App() {
   const [streamSpeed, setStreamSpeed] = useState(50);
   const [isRecording, setIsRecording] = useState(false);
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
+  const [isFullClipGalleryOpen, setIsFullClipGalleryOpen] = useState(false);
   const [isColorCustomizerOpen, setIsColorCustomizerOpen] = useState(false);
   const [colorScheme, setColorScheme] = useState<ColorScheme>(defaultColorScheme);
   const [pendingVideo, setPendingVideo] = useState<{
@@ -109,6 +111,14 @@ function App() {
     setIsGalleryOpen(false);
   };
 
+  const handleOpenFullClipGallery = () => {
+    setIsFullClipGalleryOpen(true);
+  };
+
+  const handleCloseFullClipGallery = () => {
+    setIsFullClipGalleryOpen(false);
+  };
+
   const handleColorSchemeChange = (newColorScheme: ColorScheme) => {
     setColorScheme(newColorScheme);
   };
@@ -178,6 +188,7 @@ function App() {
               onOpenGallery={handleOpenGallery}
               onResetStream={handleResetStream}
               selectedFile={selectedFile}
+              onOpenFullClipGallery={handleOpenFullClipGallery}
             />
           </div>
         </div>
@@ -223,6 +234,12 @@ function App() {
         onClose={handleCloseGallery}
         pendingVideo={pendingVideo}
         onPendingVideoSaved={handlePendingVideoSaved}
+      />
+
+      {/* FullClip Gallery Modal */}
+      <FullClipGallery
+        isOpen={isFullClipGalleryOpen}
+        onClose={handleCloseFullClipGallery}
       />
     </div>
   );

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Pause, Square, Film, Settings, Zap, Clock, GalleryVertical as Gallery, RotateCcw } from 'lucide-react';
+import { Play, Pause, Square, Film, Settings, Zap, Clock, GalleryVertical as Gallery, RotateCcw, FileAudio } from 'lucide-react';
 import { FileData } from '../App';
 
 interface ControlPanelProps {
@@ -12,6 +12,7 @@ interface ControlPanelProps {
   onOpenGallery: () => void;
   onResetStream: () => void;
   selectedFile: FileData | null;
+  onOpenFullClipGallery?: () => void;
 }
 
 const ControlPanel: React.FC<ControlPanelProps> = ({
@@ -23,7 +24,8 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
   onSpeedChange,
   onOpenGallery,
   onResetStream,
-  selectedFile
+  selectedFile,
+  onOpenFullClipGallery
 }) => {
   return (
     <div className="bg-black border-2 border-white rounded-xl p-6">
@@ -87,7 +89,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
         </div>
       </div>
 
-      {/* Speed Control */}
+      {/* Speed Control - ENHANCED: Much faster speeds */}
       <div className="mb-10">
         <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-3">
           <div className="p-1 border-2 border-white rounded">
@@ -100,12 +102,12 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
           <div className="flex items-center justify-between text-lg font-bold">
             <span className="text-gray-400">Slow</span>
             <span className="text-white bg-black border-2 border-white px-4 py-2 rounded">{speed}%</span>
-            <span className="text-gray-400">Fast</span>
+            <span className="text-gray-400">Ultra Fast</span>
           </div>
           
           <input
             type="range"
-            min="10"
+            min="1"
             max="100"
             value={speed}
             onChange={(e) => onSpeedChange(Number(e.target.value))}
@@ -116,8 +118,16 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
           />
           
           <div className="flex justify-between text-sm text-gray-400 font-medium">
-            <span>Slow & Detailed</span>
-            <span>Quick Preview</span>
+            <span>Detailed View</span>
+            <span>Lightning Fast</span>
+          </div>
+          
+          {/* Speed indicators */}
+          <div className="text-xs text-gray-400 text-center">
+            {speed <= 20 && "Perfect for tutorials and detailed explanations"}
+            {speed > 20 && speed <= 50 && "Good balance of speed and readability"}
+            {speed > 50 && speed <= 80 && "Fast preview mode"}
+            {speed > 80 && "Ultra-fast for large files - entire file in ~1 minute"}
           </div>
         </div>
       </div>
@@ -147,14 +157,26 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
             {isRecording ? 'Stop Recording' : 'Start Recording'}
           </button>
 
-          <button
-            onClick={onOpenGallery}
-            className="w-full flex items-center justify-center gap-3 py-3 px-6 rounded-lg font-bold text-lg
-                     bg-black border-2 border-white text-white hover:bg-white hover:text-black transition-all duration-200"
-          >
-            <Gallery className="w-5 h-5" />
-            Open Gallery
-          </button>
+          {/* UPDATED: Gallery buttons */}
+          <div className="grid grid-cols-1 gap-3">
+            <button
+              onClick={onOpenGallery}
+              className="w-full flex items-center justify-center gap-3 py-3 px-6 rounded-lg font-bold text-lg
+                       bg-black border-2 border-white text-white hover:bg-white hover:text-black transition-all duration-200"
+            >
+              <Gallery className="w-5 h-5" />
+              Video Gallery
+            </button>
+            
+            <button
+              onClick={onOpenFullClipGallery}
+              className="w-full flex items-center justify-center gap-3 py-3 px-6 rounded-lg font-bold text-lg
+                       bg-black border-2 border-white text-white hover:bg-white hover:text-black transition-all duration-200"
+            >
+              <FileAudio className="w-5 h-5" />
+              FullClip Gallery
+            </button>
+          </div>
         </div>
         
         <p className="text-sm text-gray-400 mt-4 text-center font-medium">
@@ -188,7 +210,10 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
             <div className="flex justify-between items-center">
               <span className="text-gray-400 font-medium">Est. Duration:</span>
               <span className="text-white font-bold">
-                {Math.round(selectedFile.content.length / (speed / 10))}s
+                {speed >= 80 
+                  ? `~${Math.round(selectedFile.content.length / (speed * 5))}s` 
+                  : `~${Math.round(selectedFile.content.length / (speed / 10))}s`
+                }
               </span>
             </div>
           </div>

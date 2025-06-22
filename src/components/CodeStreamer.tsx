@@ -75,7 +75,7 @@ const CodeStreamer = forwardRef<HTMLDivElement, CodeStreamerProps>(
       }
     }, [file]);
 
-    // Handle streaming control - FIXED: Immediate start
+    // Handle streaming control - ENHANCED: Much faster speeds
     useEffect(() => {
       if (!file) return;
 
@@ -86,21 +86,33 @@ const CodeStreamer = forwardRef<HTMLDivElement, CodeStreamerProps>(
       }
 
       if (isStreaming && !isPaused) {
-        // Start streaming immediately
-        const streamingSpeed = 101 - speed;
+        // ENHANCED: New speed calculation for much faster streaming
+        // Speed 1-100 now maps to much faster intervals
+        // Speed 100 = 1ms interval (extremely fast)
+        // Speed 50 = 10ms interval (very fast)
+        // Speed 1 = 200ms interval (slow)
+        const streamingSpeed = Math.max(1, Math.round(201 - (speed * 2)));
+        
+        // For very high speeds (80+), stream multiple characters at once
+        const charactersPerInterval = speed >= 80 ? Math.floor(speed / 20) : 1;
+        
+        console.log(`Streaming at speed ${speed}: ${streamingSpeed}ms interval, ${charactersPerInterval} chars per interval`);
         
         intervalRef.current = setInterval(() => {
           setCurrentIndex(prevIndex => {
-            if (prevIndex < file.content.length) {
-              setDisplayedContent(prev => prev + file.content[prevIndex]);
-              return prevIndex + 1;
+            const nextIndex = prevIndex + charactersPerInterval;
+            if (nextIndex < file.content.length) {
+              const newContent = file.content.substring(0, nextIndex);
+              setDisplayedContent(newContent);
+              return nextIndex;
             } else {
-              // Streaming complete
+              // Streaming complete - show full content
+              setDisplayedContent(file.content);
               if (intervalRef.current) {
                 clearInterval(intervalRef.current);
                 intervalRef.current = null;
               }
-              return prevIndex;
+              return file.content.length;
             }
           });
         }, streamingSpeed);
