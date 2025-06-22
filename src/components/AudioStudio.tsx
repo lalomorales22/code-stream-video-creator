@@ -46,6 +46,7 @@ const AudioStudio: React.FC<AudioStudioProps> = ({
   onAudioVideoSaved
 }) => {
   const [elevenLabsApiKey, setElevenLabsApiKey] = useState('');
+  const [xaiApiKey, setXaiApiKey] = useState('');
   const [availableVoices, setAvailableVoices] = useState<ElevenLabsVoice[]>([]);
   const [selectedVoice, setSelectedVoice] = useState<string>('');
   const [script, setScript] = useState('');
@@ -68,20 +69,31 @@ const AudioStudio: React.FC<AudioStudioProps> = ({
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Load API key from localStorage
+  // Load API keys from localStorage
   useEffect(() => {
-    const savedApiKey = localStorage.getItem('elevenlabs_api_key');
-    if (savedApiKey) {
-      setElevenLabsApiKey(savedApiKey);
+    const savedElevenLabsKey = localStorage.getItem('elevenlabs_api_key');
+    const savedXaiKey = localStorage.getItem('xai_api_key');
+    
+    if (savedElevenLabsKey) {
+      setElevenLabsApiKey(savedElevenLabsKey);
+    }
+    if (savedXaiKey) {
+      setXaiApiKey(savedXaiKey);
     }
   }, []);
 
-  // Save API key to localStorage
+  // Save API keys to localStorage
   useEffect(() => {
     if (elevenLabsApiKey) {
       localStorage.setItem('elevenlabs_api_key', elevenLabsApiKey);
     }
   }, [elevenLabsApiKey]);
+
+  useEffect(() => {
+    if (xaiApiKey) {
+      localStorage.setItem('xai_api_key', xaiApiKey);
+    }
+  }, [xaiApiKey]);
 
   // Load voices when API key is available
   useEffect(() => {
@@ -165,32 +177,104 @@ Let's dive into the code and see what we can learn together.`;
   };
 
   const generateAIScript = async () => {
-    if (!selectedVideo) return;
+    if (!selectedVideo || !xaiApiKey) {
+      alert('Please provide XAI API key and select a video first.');
+      return;
+    }
 
     setIsGeneratingScript(true);
     try {
-      // This would typically call an AI service like OpenAI
-      // For now, we'll generate a more detailed script
+      console.log('Generating AI script with Grok...');
+      
       const language = selectedVideo.file_language;
       const filename = selectedVideo.original_filename;
       const duration = selectedVideo.duration;
+      const currentScript = script || '';
 
-      const aiScript = `Hello and welcome to this comprehensive ${language} code walkthrough! 
+      // Create a comprehensive prompt for Grok
+      const systemPrompt = `You are an expert programming instructor creating engaging narration scripts for code demonstration videos. Your goal is to create educational, clear, and engaging commentary that matches the video duration perfectly.`;
 
-In this ${duration}-second video, we're going to explore the ${filename} file, which showcases some excellent ${language} programming techniques.
+      const userPrompt = `Create a ${duration}-second narration script for a code streaming video with these details:
 
-As we stream through this code, you'll notice several key concepts being demonstrated. The structure and organization of this code follows modern ${language} best practices.
+**Video Information:**
+- File: ${filename}
+- Language: ${language}
+- Duration: ${duration} seconds
+- Current script (if any): "${currentScript}"
 
-Pay attention to the syntax highlighting and the way the code flows - each line builds upon the previous one to create a cohesive and functional program.
+**Requirements:**
+1. Script should take approximately ${duration} seconds to read aloud (aim for ~150 words per minute)
+2. Be educational and engaging for developers learning ${language}
+3. Explain key concepts that would be visible in a ${language} code file
+4. Use a conversational, friendly tone
+5. Include natural pauses and transitions
+6. Focus on practical insights and best practices
+7. Make it suitable for social media (TikTok, Instagram, YouTube Shorts)
 
-Whether you're a beginner learning ${language} or an experienced developer looking to refine your skills, this code demonstration will provide valuable insights.
+**Script Structure:**
+- Hook (first 3-5 seconds): Grab attention
+- Introduction (next 5-10 seconds): What we're looking at
+- Main content (middle portion): Key concepts and explanations
+- Conclusion (last 5-10 seconds): Wrap up with key takeaway
 
-Let's begin our journey through this fascinating piece of ${language} code!`;
+Please generate ONLY the script text, no additional formatting or explanations.`;
 
-      setScript(aiScript);
+      const response = await fetch('https://api.x.ai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${xaiApiKey}`
+        },
+        body: JSON.stringify({
+          model: 'grok-2-latest',
+          messages: [
+            {
+              role: 'system',
+              content: systemPrompt
+            },
+            {
+              role: 'user',
+              content: userPrompt
+            }
+          ],
+          max_tokens: 1000,
+          temperature: 0.7
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(`XAI API error: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
+      }
+
+      const data = await response.json();
+      const generatedScript = data.choices?.[0]?.message?.content;
+
+      if (!generatedScript) {
+        throw new Error('No script generated from XAI API');
+      }
+
+      console.log('AI script generated successfully');
+      setScript(generatedScript.trim());
+
     } catch (error) {
       console.error('Failed to generate AI script:', error);
-      alert('Failed to generate AI script. Please try again.');
+      
+      // Provide user-friendly error messages
+      let errorMessage = 'Failed to generate AI script. ';
+      if (error instanceof Error) {
+        if (error.message.includes('401')) {
+          errorMessage += 'Please check your XAI API key.';
+        } else if (error.message.includes('429')) {
+          errorMessage += 'Rate limit exceeded. Please try again in a moment.';
+        } else if (error.message.includes('network')) {
+          errorMessage += 'Network error. Please check your connection.';
+        } else {
+          errorMessage += error.message;
+        }
+      }
+      
+      alert(errorMessage);
     } finally {
       setIsGeneratingScript(false);
     }
@@ -543,6 +627,12 @@ Let's begin our journey through this fascinating piece of ${language} code!`;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const estimateReadingTime = (text: string): number => {
+    // Average reading speed is about 150 words per minute for narration
+    const words = text.trim().split(/\s+/).length;
+    return Math.round((words / 150) * 60); // Convert to seconds
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -575,19 +665,35 @@ Let's begin our journey through this fascinating piece of ${language} code!`;
           {/* Left Panel - Configuration */}
           <div className="w-1/2 border-r-2 border-white flex flex-col">
             <div className="p-6 space-y-6 overflow-y-auto">
-              {/* API Key */}
-              <div>
-                <label className="block text-white font-bold mb-2">ElevenLabs API Key</label>
-                <input
-                  type="password"
-                  value={elevenLabsApiKey}
-                  onChange={(e) => setElevenLabsApiKey(e.target.value)}
-                  placeholder="Enter your ElevenLabs API key"
-                  className="w-full p-3 bg-black border-2 border-white text-white rounded font-mono"
-                />
-                <p className="text-gray-400 text-sm mt-2">
-                  Get your API key from <a href="https://elevenlabs.io" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">elevenlabs.io</a>
-                </p>
+              {/* API Keys */}
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-white font-bold mb-2">XAI API Key (for AI Script Generation)</label>
+                  <input
+                    type="password"
+                    value={xaiApiKey}
+                    onChange={(e) => setXaiApiKey(e.target.value)}
+                    placeholder="Enter your XAI API key"
+                    className="w-full p-3 bg-black border-2 border-white text-white rounded font-mono"
+                  />
+                  <p className="text-gray-400 text-sm mt-2">
+                    Get your API key from <a href="https://x.ai" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">x.ai</a>
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-white font-bold mb-2">ElevenLabs API Key</label>
+                  <input
+                    type="password"
+                    value={elevenLabsApiKey}
+                    onChange={(e) => setElevenLabsApiKey(e.target.value)}
+                    placeholder="Enter your ElevenLabs API key"
+                    className="w-full p-3 bg-black border-2 border-white text-white rounded font-mono"
+                  />
+                  <p className="text-gray-400 text-sm mt-2">
+                    Get your API key from <a href="https://elevenlabs.io" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">elevenlabs.io</a>
+                  </p>
+                </div>
               </div>
 
               {/* Voice Selection */}
@@ -617,12 +723,12 @@ Let's begin our journey through this fascinating piece of ${language} code!`;
                   <label className="text-white font-bold">Script</label>
                   <button
                     onClick={generateAIScript}
-                    disabled={isGeneratingScript || !selectedVideo}
+                    disabled={isGeneratingScript || !selectedVideo || !xaiApiKey}
                     className="flex items-center gap-2 bg-white hover:bg-gray-200 disabled:bg-gray-600 
                              text-black px-3 py-1 rounded font-bold transition-colors text-sm border-2 border-white"
                   >
                     <Wand2 className="w-4 h-4" />
-                    {isGeneratingScript ? 'Generating...' : 'AI Generate'}
+                    {isGeneratingScript ? 'Generating...' : 'AI Generate with Grok'}
                   </button>
                 </div>
                 <textarea
@@ -631,9 +737,19 @@ Let's begin our journey through this fascinating piece of ${language} code!`;
                   placeholder="Enter your script or use AI generation..."
                   className="w-full h-32 p-3 bg-black border-2 border-white text-white rounded resize-none"
                 />
-                <p className="text-gray-400 text-sm mt-2">
-                  Estimated duration: ~{Math.ceil(script.length / 150)} seconds
-                </p>
+                <div className="flex justify-between text-sm mt-2">
+                  <p className="text-gray-400">
+                    Estimated reading time: ~{estimateReadingTime(script)} seconds
+                  </p>
+                  <p className="text-gray-400">
+                    Target: {selectedVideo?.duration || 0} seconds
+                  </p>
+                </div>
+                {script && Math.abs(estimateReadingTime(script) - (selectedVideo?.duration || 0)) > 5 && (
+                  <p className="text-yellow-400 text-sm mt-1">
+                    ⚠️ Script duration doesn't match video duration. Consider adjusting.
+                  </p>
+                )}
               </div>
 
               {/* Audio Generation */}
@@ -763,6 +879,46 @@ Let's begin our journey through this fascinating piece of ${language} code!`;
                 </div>
               )}
 
+              {/* AI Script Info */}
+              {script && xaiApiKey && (
+                <div className="mb-6 bg-black border-2 border-white rounded-lg p-4">
+                  <h4 className="text-white font-bold mb-2 flex items-center gap-2">
+                    <Wand2 className="w-4 h-4" />
+                    AI-Generated Script Analysis
+                  </h4>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Words:</span>
+                      <span className="text-white">{script.trim().split(/\s+/).length}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Estimated Duration:</span>
+                      <span className="text-white">{estimateReadingTime(script)}s</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Target Duration:</span>
+                      <span className="text-white">{selectedVideo?.duration || 0}s</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Match Quality:</span>
+                      <span className={`font-bold ${
+                        Math.abs(estimateReadingTime(script) - (selectedVideo?.duration || 0)) <= 3 
+                          ? 'text-green-400' 
+                          : Math.abs(estimateReadingTime(script) - (selectedVideo?.duration || 0)) <= 8
+                          ? 'text-yellow-400'
+                          : 'text-red-400'
+                      }`}>
+                        {Math.abs(estimateReadingTime(script) - (selectedVideo?.duration || 0)) <= 3 
+                          ? 'Excellent' 
+                          : Math.abs(estimateReadingTime(script) - (selectedVideo?.duration || 0)) <= 8
+                          ? 'Good'
+                          : 'Needs Adjustment'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Final Processing */}
               <div className="mt-8">
                 <button
@@ -775,7 +931,7 @@ Let's begin our journey through this fascinating piece of ${language} code!`;
                   {isProcessingVideo ? 'Processing Video...' : 'Save to FullClip Gallery'}
                 </button>
                 <p className="text-gray-400 text-sm mt-2 text-center">
-                  This will combine your video with audio and captions
+                  This will combine your video with AI-generated audio and captions
                 </p>
               </div>
             </div>
