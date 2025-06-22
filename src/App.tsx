@@ -3,9 +3,7 @@ import { Upload, Play, Pause, Square, Settings, Film, ExternalLink } from 'lucid
 import FileManager from './components/FileManager';
 import CodeStreamer from './components/CodeStreamer';
 import ControlPanel from './components/ControlPanel';
-import VideoGallery from './components/VideoGallery';
-import FullClipGallery from './components/FullClipGallery';
-import ShortsGallery from './components/ShortsGallery';
+import UnifiedGallery from './components/UnifiedGallery';
 import ColorCustomizer, { ColorScheme } from './components/ColorCustomizer';
 
 export interface FileData {
@@ -36,8 +34,7 @@ function App() {
   const [streamSpeed, setStreamSpeed] = useState(50);
   const [isRecording, setIsRecording] = useState(false);
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
-  const [isFullClipGalleryOpen, setIsFullClipGalleryOpen] = useState(false);
-  const [isShortsGalleryOpen, setIsShortsGalleryOpen] = useState(false);
+  const [galleryTab, setGalleryTab] = useState<'videos' | 'fullclip' | 'shorts'>('videos');
   const [isColorCustomizerOpen, setIsColorCustomizerOpen] = useState(false);
   const [colorScheme, setColorScheme] = useState<ColorScheme>(defaultColorScheme);
   const [pendingVideo, setPendingVideo] = useState<{
@@ -50,18 +47,6 @@ function App() {
   } | null>(null);
   const videoRef = useRef<HTMLDivElement>(null);
   const codeStreamerRef = useRef<any>(null);
-
-  // Listen for Shorts Gallery open event
-  React.useEffect(() => {
-    const handleOpenShortsGallery = () => {
-      setIsShortsGalleryOpen(true);
-    };
-
-    window.addEventListener('openShortsGallery', handleOpenShortsGallery);
-    return () => {
-      window.removeEventListener('openShortsGallery', handleOpenShortsGallery);
-    };
-  }, []);
 
   const handleFilesUploaded = (uploadedFiles: FileData[]) => {
     setFiles(prev => [...prev, ...uploadedFiles]);
@@ -108,6 +93,7 @@ function App() {
     });
 
     // Auto-open gallery to show the new recording
+    setGalleryTab('videos');
     setIsGalleryOpen(true);
     
     console.log(`Video recorded: ${fileName} (${duration}s)`);
@@ -117,28 +103,13 @@ function App() {
     setPendingVideo(null);
   };
 
-  const handleOpenGallery = () => {
+  const handleOpenGallery = (tab: 'videos' | 'fullclip' | 'shorts' = 'videos') => {
+    setGalleryTab(tab);
     setIsGalleryOpen(true);
   };
 
   const handleCloseGallery = () => {
     setIsGalleryOpen(false);
-  };
-
-  const handleOpenFullClipGallery = () => {
-    setIsFullClipGalleryOpen(true);
-  };
-
-  const handleCloseFullClipGallery = () => {
-    setIsFullClipGalleryOpen(false);
-  };
-
-  const handleOpenShortsGallery = () => {
-    setIsShortsGalleryOpen(true);
-  };
-
-  const handleCloseShortsGallery = () => {
-    setIsShortsGalleryOpen(false);
   };
 
   const handleColorSchemeChange = (newColorScheme: ColorScheme) => {
@@ -207,11 +178,11 @@ function App() {
               onToggleStreaming={handleStreamingToggle}
               onToggleRecording={handleRecordingToggle}
               onSpeedChange={setStreamSpeed}
-              onOpenGallery={handleOpenGallery}
+              onOpenGallery={() => handleOpenGallery('videos')}
               onResetStream={handleResetStream}
               selectedFile={selectedFile}
-              onOpenFullClipGallery={handleOpenFullClipGallery}
-              onOpenShortsGallery={handleOpenShortsGallery}
+              onOpenFullClipGallery={() => handleOpenGallery('fullclip')}
+              onOpenShortsGallery={() => handleOpenGallery('shorts')}
             />
           </div>
         </div>
@@ -225,7 +196,7 @@ function App() {
                 Your MP4 video is ready to save to the gallery
               </p>
               <button
-                onClick={handleOpenGallery}
+                onClick={() => handleOpenGallery('videos')}
                 className="bg-white hover:bg-gray-200 text-black px-8 py-3 rounded-lg font-bold text-lg transition-colors border-2 border-white"
               >
                 Open Gallery to Save
@@ -251,24 +222,13 @@ function App() {
         </a>
       </div>
 
-      {/* Video Gallery Modal */}
-      <VideoGallery
+      {/* Unified Gallery Modal */}
+      <UnifiedGallery
         isOpen={isGalleryOpen}
         onClose={handleCloseGallery}
+        initialTab={galleryTab}
         pendingVideo={pendingVideo}
         onPendingVideoSaved={handlePendingVideoSaved}
-      />
-
-      {/* FullClip Gallery Modal */}
-      <FullClipGallery
-        isOpen={isFullClipGalleryOpen}
-        onClose={handleCloseFullClipGallery}
-      />
-
-      {/* Shorts Gallery Modal */}
-      <ShortsGallery
-        isOpen={isShortsGalleryOpen}
-        onClose={handleCloseShortsGallery}
       />
     </div>
   );
