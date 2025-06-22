@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Play, Download, Trash2, Calendar, Clock, Code, X, Users, Sparkles } from 'lucide-react';
+import { Play, Download, Trash2, Calendar, Clock, Code, X, Users, Sparkles, Loader2 } from 'lucide-react';
 import { dbManager, ShortsVideoRecord } from '../utils/database';
 
 interface ShortsGalleryProps {
@@ -15,6 +15,7 @@ const ShortsGallery: React.FC<ShortsGalleryProps> = ({
   const [loading, setLoading] = useState(false);
   const [selectedVideo, setSelectedVideo] = useState<ShortsVideoRecord | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [deletingVideoId, setDeletingVideoId] = useState<number | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -79,7 +80,7 @@ const ShortsGallery: React.FC<ShortsGalleryProps> = ({
   };
 
   const handleDeleteVideo = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this Shorts video?')) return;
+    setDeletingVideoId(id);
 
     try {
       console.log('Deleting Shorts video with ID:', id);
@@ -97,6 +98,8 @@ const ShortsGallery: React.FC<ShortsGalleryProps> = ({
     } catch (error) {
       console.error('Failed to delete video:', error);
       setError('Failed to delete video');
+    } finally {
+      setDeletingVideoId(null);
     }
   };
 
@@ -168,6 +171,14 @@ const ShortsGallery: React.FC<ShortsGalleryProps> = ({
           </div>
         )}
 
+        {/* Deleting Overlay */}
+        {deletingVideoId && (
+          <div className="mx-6 mt-4 bg-black border-2 border-white rounded-lg p-4 flex items-center gap-3">
+            <Loader2 className="w-6 h-6 text-white animate-spin flex-shrink-0" />
+            <span className="text-white font-medium">Deleting video...</span>
+          </div>
+        )}
+
         <div className="flex-1 flex overflow-hidden">
           {/* Video List */}
           <div className="w-1/2 border-r-2 border-white flex flex-col">
@@ -190,12 +201,22 @@ const ShortsGallery: React.FC<ShortsGalleryProps> = ({
                   {videos.map(video => (
                     <div
                       key={video.id}
-                      className={`bg-black rounded-lg p-6 border-2 transition-all cursor-pointer
+                      className={`bg-black rounded-lg p-6 border-2 transition-all cursor-pointer relative
                                 ${selectedVideo?.id === video.id 
                                   ? 'border-white bg-white text-black' 
                                   : 'border-gray-600 hover:border-white text-white'}`}
                       onClick={() => handlePlayVideo(video)}
                     >
+                      {/* Deleting overlay */}
+                      {deletingVideoId === video.id && (
+                        <div className="absolute inset-0 bg-black/80 backdrop-blur-sm rounded-lg flex items-center justify-center">
+                          <div className="flex items-center gap-3 text-white">
+                            <Loader2 className="w-6 h-6 animate-spin" />
+                            <span className="font-bold">Deleting...</span>
+                          </div>
+                        </div>
+                      )}
+
                       <div className="flex items-start justify-between mb-3">
                         <h4 className="font-bold text-lg truncate">{video.original_filename}</h4>
                         <div className="flex gap-2 ml-4">
@@ -204,11 +225,12 @@ const ShortsGallery: React.FC<ShortsGalleryProps> = ({
                               e.stopPropagation();
                               handleDownloadVideo(video);
                             }}
+                            disabled={deletingVideoId === video.id}
                             className={`p-2 rounded transition-colors border-2 ${
                               selectedVideo?.id === video.id 
                                 ? 'border-black text-black hover:bg-black hover:text-white' 
                                 : 'border-white text-white hover:bg-white hover:text-black'
-                            }`}
+                            } disabled:opacity-50 disabled:cursor-not-allowed`}
                             title="Download MP4 with Avatar"
                           >
                             <Download className="w-5 h-5" />
@@ -218,11 +240,12 @@ const ShortsGallery: React.FC<ShortsGalleryProps> = ({
                               e.stopPropagation();
                               handleDeleteVideo(video.id);
                             }}
+                            disabled={deletingVideoId === video.id}
                             className={`p-2 rounded transition-colors border-2 ${
                               selectedVideo?.id === video.id 
                                 ? 'border-black text-black hover:bg-black hover:text-white' 
                                 : 'border-white text-white hover:bg-white hover:text-black'
-                            }`}
+                            } disabled:opacity-50 disabled:cursor-not-allowed`}
                           >
                             <Trash2 className="w-5 h-5" />
                           </button>

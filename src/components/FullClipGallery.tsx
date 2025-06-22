@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Play, Download, Trash2, Calendar, Clock, Code, X, FileAudio, Captions, Users } from 'lucide-react';
+import { Play, Download, Trash2, Calendar, Clock, Code, X, FileAudio, Captions, Users, Loader2 } from 'lucide-react';
 import { dbManager, FullClipVideoRecord } from '../utils/database';
 import ShortsStudio from './ShortsStudio';
 
@@ -19,6 +19,7 @@ const FullClipGallery: React.FC<FullClipGalleryProps> = ({
   const [showCaptions, setShowCaptions] = useState(true);
   const [isShortsStudioOpen, setIsShortsStudioOpen] = useState(false);
   const [videoForShorts, setVideoForShorts] = useState<FullClipVideoRecord | null>(null);
+  const [deletingVideoId, setDeletingVideoId] = useState<number | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -106,7 +107,7 @@ const FullClipGallery: React.FC<FullClipGalleryProps> = ({
   };
 
   const handleDeleteVideo = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this FullClip video?')) return;
+    setDeletingVideoId(id);
 
     try {
       console.log('Deleting FullClip video with ID:', id);
@@ -124,6 +125,8 @@ const FullClipGallery: React.FC<FullClipGalleryProps> = ({
     } catch (error) {
       console.error('Failed to delete video:', error);
       setError('Failed to delete video');
+    } finally {
+      setDeletingVideoId(null);
     }
   };
 
@@ -196,6 +199,14 @@ const FullClipGallery: React.FC<FullClipGalleryProps> = ({
             </div>
           )}
 
+          {/* Deleting Overlay */}
+          {deletingVideoId && (
+            <div className="mx-6 mt-4 bg-black border-2 border-white rounded-lg p-4 flex items-center gap-3">
+              <Loader2 className="w-6 h-6 text-white animate-spin flex-shrink-0" />
+              <span className="text-white font-medium">Deleting video...</span>
+            </div>
+          )}
+
           <div className="flex-1 flex overflow-hidden">
             {/* Video List */}
             <div className="w-1/2 border-r-2 border-white flex flex-col">
@@ -218,12 +229,22 @@ const FullClipGallery: React.FC<FullClipGalleryProps> = ({
                     {videos.map(video => (
                       <div
                         key={video.id}
-                        className={`bg-black rounded-lg p-6 border-2 transition-all cursor-pointer
+                        className={`bg-black rounded-lg p-6 border-2 transition-all cursor-pointer relative
                                   ${selectedVideo?.id === video.id 
                                     ? 'border-white bg-white text-black' 
                                     : 'border-gray-600 hover:border-white text-white'}`}
                         onClick={() => handlePlayVideo(video)}
                       >
+                        {/* Deleting overlay */}
+                        {deletingVideoId === video.id && (
+                          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm rounded-lg flex items-center justify-center">
+                            <div className="flex items-center gap-3 text-white">
+                              <Loader2 className="w-6 h-6 animate-spin" />
+                              <span className="font-bold">Deleting...</span>
+                            </div>
+                          </div>
+                        )}
+
                         <div className="flex items-start justify-between mb-3">
                           <h4 className="font-bold text-lg truncate">{video.original_filename}</h4>
                           <div className="flex gap-2 ml-4">
@@ -232,11 +253,12 @@ const FullClipGallery: React.FC<FullClipGalleryProps> = ({
                                 e.stopPropagation();
                                 handleSendToShorts(video);
                               }}
+                              disabled={deletingVideoId === video.id}
                               className={`p-2 rounded transition-colors border-2 ${
                                 selectedVideo?.id === video.id 
                                   ? 'border-black text-black hover:bg-black hover:text-white' 
                                   : 'border-white text-white hover:bg-white hover:text-black'
-                              }`}
+                              } disabled:opacity-50 disabled:cursor-not-allowed`}
                               title="Send to Shorts Gallery"
                             >
                               <Users className="w-5 h-5" />
@@ -246,11 +268,12 @@ const FullClipGallery: React.FC<FullClipGalleryProps> = ({
                                 e.stopPropagation();
                                 handleDownloadVideo(video);
                               }}
+                              disabled={deletingVideoId === video.id}
                               className={`p-2 rounded transition-colors border-2 ${
                                 selectedVideo?.id === video.id 
                                   ? 'border-black text-black hover:bg-black hover:text-white' 
                                   : 'border-white text-white hover:bg-white hover:text-black'
-                              }`}
+                              } disabled:opacity-50 disabled:cursor-not-allowed`}
                               title="Download MP4 with Audio"
                             >
                               <Download className="w-5 h-5" />
@@ -260,11 +283,12 @@ const FullClipGallery: React.FC<FullClipGalleryProps> = ({
                                 e.stopPropagation();
                                 handleDeleteVideo(video.id);
                               }}
+                              disabled={deletingVideoId === video.id}
                               className={`p-2 rounded transition-colors border-2 ${
                                 selectedVideo?.id === video.id 
                                   ? 'border-black text-black hover:bg-black hover:text-white' 
                                   : 'border-white text-white hover:bg-white hover:text-black'
-                              }`}
+                              } disabled:opacity-50 disabled:cursor-not-allowed`}
                             >
                               <Trash2 className="w-5 h-5" />
                             </button>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Play, Download, Trash2, Calendar, Clock, Code, X, Save, AlertCircle, FileAudio, Mic } from 'lucide-react';
+import { Play, Download, Trash2, Calendar, Clock, Code, X, Save, AlertCircle, FileAudio, Mic, Loader2 } from 'lucide-react';
 import { dbManager, VideoRecord } from '../utils/database';
 import AudioStudio from './AudioStudio';
 import FullClipGallery from './FullClipGallery';
@@ -29,10 +29,11 @@ const VideoGallery: React.FC<VideoGalleryProps> = ({
   const [selectedVideo, setSelectedVideo] = useState<VideoRecord | null>(null);
   const [savingPending, setSavingPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [dbStats, setDbStats] = useState<{ videoCount: number; fullClipCount: number; dbSize: number } | null>(null);
+  const [dbStats, setDbStats] = useState<{ videoCount: number; fullClipCount: number; shortsCount: number; dbSize: number } | null>(null);
   const [isAudioStudioOpen, setIsAudioStudioOpen] = useState(false);
   const [isFullClipGalleryOpen, setIsFullClipGalleryOpen] = useState(false);
   const [videoForAudio, setVideoForAudio] = useState<VideoRecord | null>(null);
+  const [deletingVideoId, setDeletingVideoId] = useState<number | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -162,7 +163,7 @@ const VideoGallery: React.FC<VideoGalleryProps> = ({
   };
 
   const handleDeleteVideo = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this video?')) return;
+    setDeletingVideoId(id);
 
     try {
       console.log('Deleting video with ID:', id);
@@ -181,6 +182,8 @@ const VideoGallery: React.FC<VideoGalleryProps> = ({
     } catch (error) {
       console.error('Failed to delete video:', error);
       setError('Failed to delete video');
+    } finally {
+      setDeletingVideoId(null);
     }
   };
 
@@ -249,7 +252,7 @@ const VideoGallery: React.FC<VideoGalleryProps> = ({
               </h2>
               {dbStats && (
                 <div className="text-lg text-gray-400 font-medium">
-                  {dbStats.videoCount} videos • {dbStats.fullClipCount} with audio • {formatFileSize(dbStats.dbSize)} total
+                  {dbStats.videoCount} videos • {dbStats.fullClipCount} with audio • {dbStats.shortsCount} shorts • {formatFileSize(dbStats.dbSize)} total
                 </div>
               )}
             </div>
@@ -281,6 +284,14 @@ const VideoGallery: React.FC<VideoGalleryProps> = ({
               >
                 <X className="w-5 h-5" />
               </button>
+            </div>
+          )}
+
+          {/* Deleting Overlay */}
+          {deletingVideoId && (
+            <div className="mx-6 mt-4 bg-black border-2 border-white rounded-lg p-4 flex items-center gap-3">
+              <Loader2 className="w-6 h-6 text-white animate-spin flex-shrink-0" />
+              <span className="text-white font-medium">Deleting video...</span>
             </div>
           )}
 
@@ -329,12 +340,22 @@ const VideoGallery: React.FC<VideoGalleryProps> = ({
                     {videos.map(video => (
                       <div
                         key={video.id}
-                        className={`bg-black rounded-lg p-6 border-2 transition-all cursor-pointer
+                        className={`bg-black rounded-lg p-6 border-2 transition-all cursor-pointer relative
                                   ${selectedVideo?.id === video.id 
                                     ? 'border-white bg-white text-black' 
                                     : 'border-gray-600 hover:border-white text-white'}`}
                         onClick={() => handlePlayVideo(video)}
                       >
+                        {/* Deleting overlay */}
+                        {deletingVideoId === video.id && (
+                          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm rounded-lg flex items-center justify-center">
+                            <div className="flex items-center gap-3 text-white">
+                              <Loader2 className="w-6 h-6 animate-spin" />
+                              <span className="font-bold">Deleting...</span>
+                            </div>
+                          </div>
+                        )}
+
                         <div className="flex items-start justify-between mb-3">
                           <h4 className="font-bold text-lg truncate">{video.original_filename}</h4>
                           <div className="flex gap-2 ml-4">
@@ -343,11 +364,12 @@ const VideoGallery: React.FC<VideoGalleryProps> = ({
                                 e.stopPropagation();
                                 handleAddAudio(video);
                               }}
+                              disabled={deletingVideoId === video.id}
                               className={`p-2 rounded transition-colors border-2 ${
                                 selectedVideo?.id === video.id 
                                   ? 'border-black text-black hover:bg-black hover:text-white' 
                                   : 'border-white text-white hover:bg-white hover:text-black'
-                              }`}
+                              } disabled:opacity-50 disabled:cursor-not-allowed`}
                               title="Add Audio & Captions"
                             >
                               <Mic className="w-5 h-5" />
@@ -357,11 +379,12 @@ const VideoGallery: React.FC<VideoGalleryProps> = ({
                                 e.stopPropagation();
                                 handleDownloadVideo(video);
                               }}
+                              disabled={deletingVideoId === video.id}
                               className={`p-2 rounded transition-colors border-2 ${
                                 selectedVideo?.id === video.id 
                                   ? 'border-black text-black hover:bg-black hover:text-white' 
                                   : 'border-white text-white hover:bg-white hover:text-black'
-                              }`}
+                              } disabled:opacity-50 disabled:cursor-not-allowed`}
                               title="Download MP4"
                             >
                               <Download className="w-5 h-5" />
@@ -371,11 +394,12 @@ const VideoGallery: React.FC<VideoGalleryProps> = ({
                                 e.stopPropagation();
                                 handleDeleteVideo(video.id);
                               }}
+                              disabled={deletingVideoId === video.id}
                               className={`p-2 rounded transition-colors border-2 ${
                                 selectedVideo?.id === video.id 
                                   ? 'border-black text-black hover:bg-black hover:text-white' 
                                   : 'border-white text-white hover:bg-white hover:text-black'
-                              }`}
+                              } disabled:opacity-50 disabled:cursor-not-allowed`}
                             >
                               <Trash2 className="w-5 h-5" />
                             </button>
