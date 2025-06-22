@@ -345,7 +345,7 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
         console.warn('Failed to parse captions:', error);
       }
       
-      // Create video element for the original video
+      // FIXED: Create video element for the original FullClip video (which has audio)
       const videoBlob = new Blob([selectedVideo.video_blob], { type: 'video/mp4' });
       const videoUrl = URL.createObjectURL(videoBlob);
       
@@ -353,12 +353,12 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
       video.src = videoUrl;
       video.crossOrigin = 'anonymous';
       
-      setProcessingProgress('Loading video...');
+      setProcessingProgress('Loading video with audio...');
       
       // Wait for video to load
       await new Promise((resolve, reject) => {
         video.onloadedmetadata = () => {
-          console.log('Video loaded:', video.duration, 'seconds');
+          console.log('FullClip video loaded with audio:', video.duration, 'seconds');
           resolve(void 0);
         };
         video.onerror = reject;
@@ -382,31 +382,49 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
       canvas.width = 720;
       canvas.height = 1280;
 
-      setProcessingProgress('Setting up audio and recording...');
+      setProcessingProgress('Setting up audio recording...');
 
-      // FIXED: Proper audio handling - create audio context and connect audio
-      const audioContext = new AudioContext();
-      const audioSource = audioContext.createMediaElementSource(video);
-      const audioDestination = audioContext.createMediaStreamDestination();
+      // FIXED: Proper audio handling - the FullClip video already has audio embedded
+      // We need to capture both video and audio from the video element
       
-      // Connect audio source to destination (this preserves the audio)
-      audioSource.connect(audioDestination);
-
-      // Get video stream from canvas
-      const videoStream = canvas.captureStream(30);
+      // Create a MediaStream from the video element (this includes both video and audio)
+      const videoStream = (video as any).captureStream ? (video as any).captureStream(30) : canvas.captureStream(30);
       
-      // FIXED: Combine video and audio streams properly
-      const combinedStream = new MediaStream([
-        ...videoStream.getVideoTracks(),
-        ...audioDestination.stream.getAudioTracks()
-      ]);
+      // Get canvas stream for video
+      const canvasStream = canvas.captureStream(30);
+      
+      // FIXED: Use the video's audio track directly since FullClip videos have embedded audio
+      let finalStream: MediaStream;
+      
+      if (videoStream && videoStream.getAudioTracks().length > 0) {
+        // Video has audio tracks - combine canvas video with video audio
+        console.log('Using audio from FullClip video');
+        finalStream = new MediaStream([
+          ...canvasStream.getVideoTracks(),
+          ...videoStream.getAudioTracks()
+        ]);
+      } else {
+        // Fallback: try to extract audio using Web Audio API
+        console.log('Fallback: extracting audio using Web Audio API');
+        const audioContext = new AudioContext();
+        const audioSource = audioContext.createMediaElementSource(video);
+        const audioDestination = audioContext.createMediaStreamDestination();
+        
+        // Connect audio source to destination
+        audioSource.connect(audioDestination);
+        
+        finalStream = new MediaStream([
+          ...canvasStream.getVideoTracks(),
+          ...audioDestination.stream.getAudioTracks()
+        ]);
+      }
 
       let mimeType = 'video/mp4';
       if (MediaRecorder.isTypeSupported('video/mp4;codecs=avc1.42E01E')) {
         mimeType = 'video/mp4;codecs=avc1.42E01E';
       }
 
-      const mediaRecorder = new MediaRecorder(combinedStream, {
+      const mediaRecorder = new MediaRecorder(finalStream, {
         mimeType: mimeType,
         videoBitsPerSecond: 2500000,
         audioBitsPerSecond: 128000
@@ -417,19 +435,19 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
           chunks.push(event.data);
+          console.log('Recorded chunk with audio:', event.data.size, 'bytes');
         }
       };
 
       mediaRecorder.onstop = async () => {
-        console.log('Recording stopped, creating final video...');
-        setProcessingProgress('Finalizing video...');
-        
-        // Clean up audio context
-        audioContext.close();
+        console.log('Recording stopped, creating final video with audio...');
+        setProcessingProgress('Finalizing video with audio...');
         
         const finalBlob = new Blob(chunks, { 
           type: 'video/mp4'
         });
+        
+        console.log('Final Shorts video created with audio:', finalBlob.size, 'bytes');
         
         setProcessingProgress('Saving to gallery...');
         
@@ -450,7 +468,7 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
             selectedVideo.original_file_content
           );
 
-          console.log('Shorts video saved successfully with ID:', videoId);
+          console.log('Shorts video with audio saved successfully with ID:', videoId);
           
           onShortsVideoSaved();
           
@@ -468,8 +486,8 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
       };
 
       // Start recording
-      console.log('Starting recording...');
-      setProcessingProgress('Recording video with avatar...');
+      console.log('Starting recording with audio...');
+      setProcessingProgress('Recording video with avatar and audio...');
       mediaRecorder.start(100);
       
       // Reset and start playback
@@ -478,11 +496,10 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
       const startTime = Date.now();
       const maxDuration = video.duration * 1000;
       
-      // FIXED: Start playback with volume set to 0 to prevent audio during processing
-      video.volume = 0; // Mute the video element to prevent double audio
+      // FIXED: Start playback - the audio will be captured by MediaRecorder
       await video.play();
       
-      console.log('Playback started, beginning render loop...');
+      console.log('Playback started with audio, beginning render loop...');
 
       // Render loop with avatar overlay and captions
       const renderFrame = () => {
@@ -598,7 +615,7 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
               </h2>
               {selectedVideo && (
                 <div className="text-lg text-gray-400 font-medium">
-                  {selectedVideo.original_filename} • {selectedVideo.duration}s
+                  {selectedVideo.original_filename} • {selectedVideo.duration}s • With Audio
                 </div>
               )}
             </div>
@@ -619,7 +636,7 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
                   <h3 className="text-2xl font-bold text-white">Processing Video</h3>
                 </div>
                 <p className="text-lg text-gray-300 mb-4">
-                  {processingProgress || 'Adding penguin avatar to your video...'}
+                  {processingProgress || 'Adding penguin avatar to your video with audio...'}
                 </p>
                 <div className="w-full bg-gray-600 h-2 rounded mb-4">
                   <div className="bg-white h-2 rounded animate-pulse" style={{ width: '100%' }} />
@@ -776,8 +793,10 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
                       style={{ aspectRatio: '9/16' }}
                       src={URL.createObjectURL(new Blob([selectedVideo.video_blob], { type: 'video/mp4' }))}
                       controls
-                      muted
                     />
+                    <p className="text-center text-gray-400 text-sm mt-2">
+                      FullClip video with embedded audio and captions
+                    </p>
                   </div>
                 )}
 
@@ -818,7 +837,7 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-400">Audio:</span>
-                      <span className="text-green-400">✓ Included</span>
+                      <span className="text-green-400">✓ From FullClip</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-400">Captions:</span>

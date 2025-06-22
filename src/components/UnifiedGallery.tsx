@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Play, Download, Trash2, Calendar, Clock, Code, X, Save, AlertCircle, FileAudio, Mic, Loader2, Users, Edit3, Captions, Sparkles } from 'lucide-react';
+import { Play, Download, Trash2, Calendar, Clock, Code, X, Save, AlertCircle, FileAudio, Mic, Loader2, Users, Edit3, Captions, Sparkles, CheckCircle } from 'lucide-react';
 import { dbManager, VideoRecord, FullClipVideoRecord, ShortsVideoRecord } from '../utils/database';
 import AudioStudio from './AudioStudio';
 import ShortsStudio from './ShortsStudio';
@@ -20,6 +20,88 @@ interface UnifiedGalleryProps {
 }
 
 type GalleryTab = 'videos' | 'fullclip' | 'shorts';
+
+// Custom Success Modal Component
+const SuccessModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  filename: string;
+  type: 'video' | 'fullclip' | 'shorts';
+}> = ({ isOpen, onClose, filename, type }) => {
+  if (!isOpen) return null;
+
+  const getSuccessContent = () => {
+    switch (type) {
+      case 'video':
+        return {
+          title: '🎬 Video Saved!',
+          description: 'Your code streaming video has been successfully saved to the gallery.',
+          icon: <Play className="w-12 h-12 text-black" />,
+          action: 'Video Gallery'
+        };
+      case 'fullclip':
+        return {
+          title: '🎵 FullClip Created!',
+          description: 'Your video with AI-generated audio and captions has been saved.',
+          icon: <FileAudio className="w-12 h-12 text-black" />,
+          action: 'FullClip Gallery'
+        };
+      case 'shorts':
+        return {
+          title: '🐧 Shorts Video Created!',
+          description: 'Your video with penguin avatar, audio, and captions is ready.',
+          icon: <Users className="w-12 h-12 text-black" />,
+          action: 'Shorts Gallery'
+        };
+    }
+  };
+
+  const content = getSuccessContent();
+
+  return (
+    <div className="fixed inset-0 bg-black/95 backdrop-blur-sm z-[60] flex items-center justify-center p-6">
+      <div className="bg-black border-2 border-white rounded-xl p-8 max-w-md text-center relative">
+        {/* Animated Success Icon */}
+        <div className="mb-6">
+          <div className="w-20 h-20 mx-auto bg-white rounded-full flex items-center justify-center animate-pulse">
+            {content.icon}
+          </div>
+        </div>
+        
+        <h3 className="text-3xl font-bold text-white mb-4">{content.title}</h3>
+        
+        <div className="space-y-4 mb-6">
+          <p className="text-lg text-gray-300">
+            {content.description}
+          </p>
+          
+          <div className="bg-gray-800 border border-gray-600 rounded-lg p-4">
+            <p className="text-sm text-gray-400 mb-1">Saved as:</p>
+            <p className="text-white font-mono text-sm break-all">{filename}</p>
+          </div>
+          
+          <div className="flex items-center justify-center gap-2 text-green-400">
+            <CheckCircle className="w-5 h-5" />
+            <span className="font-bold">Successfully Saved</span>
+          </div>
+        </div>
+        
+        <button
+          onClick={onClose}
+          className="w-full bg-white hover:bg-gray-200 text-black px-6 py-3 rounded-lg font-bold 
+                   transition-colors border-2 border-white flex items-center justify-center gap-2"
+        >
+          <CheckCircle className="w-5 h-5" />
+          Continue
+        </button>
+        
+        <p className="text-gray-400 text-sm mt-4">
+          Your video is ready to download and share!
+        </p>
+      </div>
+    </div>
+  );
+};
 
 const UnifiedGallery: React.FC<UnifiedGalleryProps> = ({
   isOpen,
@@ -47,6 +129,13 @@ const UnifiedGallery: React.FC<UnifiedGalleryProps> = ({
   // File rename state
   const [customFilename, setCustomFilename] = useState('');
   const [isEditingFilename, setIsEditingFilename] = useState(false);
+  
+  // Success modal state
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successModalData, setSuccessModalData] = useState<{
+    filename: string;
+    type: 'video' | 'fullclip' | 'shorts';
+  }>({ filename: '', type: 'video' });
 
   useEffect(() => {
     if (isOpen) {
@@ -101,11 +190,15 @@ const UnifiedGallery: React.FC<UnifiedGalleryProps> = ({
         throw new Error('Invalid video blob - size is 0');
       }
 
+      // FIXED: Use the custom filename properly
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const finalFilename = `${customFilename}-${timestamp}.mp4`;
+      const cleanFilename = customFilename.trim() || 'untitled';
+      const finalFilename = `${cleanFilename}-${timestamp}.mp4`;
+
+      console.log('Saving video with custom filename:', finalFilename);
 
       const videoId = await dbManager.saveVideo(
-        finalFilename,
+        finalFilename, // Use the custom filename here
         pendingVideo.originalFilename,
         pendingVideo.language,
         pendingVideo.duration,
@@ -115,6 +208,14 @@ const UnifiedGallery: React.FC<UnifiedGalleryProps> = ({
       
       await loadAllData();
       onPendingVideoSaved?.();
+      
+      // FIXED: Show custom success modal
+      setSuccessModalData({
+        filename: finalFilename,
+        type: 'video'
+      });
+      setShowSuccessModal(true);
+      
       setError(null);
     } catch (error) {
       console.error('Failed to save video:', error);
@@ -221,6 +322,10 @@ const UnifiedGallery: React.FC<UnifiedGalleryProps> = ({
   const handleShortsVideoSaved = async () => {
     await loadAllData();
     setActiveTab('shorts'); // Switch to Shorts tab
+  };
+
+  const handleSuccessModalClose = () => {
+    setShowSuccessModal(false);
   };
 
   const formatDate = (dateString: string) => {
@@ -759,6 +864,14 @@ const UnifiedGallery: React.FC<UnifiedGalleryProps> = ({
         onClose={handleShortsStudioClose}
         selectedVideo={videoForShorts}
         onShortsVideoSaved={handleShortsVideoSaved}
+      />
+
+      {/* Custom Success Modal */}
+      <SuccessModal
+        isOpen={showSuccessModal}
+        onClose={handleSuccessModalClose}
+        filename={successModalData.filename}
+        type={successModalData.type}
       />
     </>
   );
