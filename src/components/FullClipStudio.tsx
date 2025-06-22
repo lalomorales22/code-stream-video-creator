@@ -1,27 +1,26 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
-  FileAudio, 
+  Mic, 
   Play, 
   Pause, 
   Square, 
   Download, 
   Save, 
+  Type, 
+  Volume2, 
+  Wand2, 
   Settings,
   X,
   Clock,
-  Sparkles,
+  FileAudio,
+  Captions,
   Loader2,
-  RotateCcw,
-  Zap,
   CheckCircle,
   Upload,
   Image as ImageIcon,
-  Mic,
-  Volume2,
-  Wand2,
-  Type,
-  Captions,
-  Users
+  Users,
+  Sparkles,
+  Trash2
 } from 'lucide-react';
 import { VideoRecord } from '../utils/database';
 import { dbManager } from '../utils/database';
@@ -52,17 +51,8 @@ interface PenguinAvatar {
   name: string;
   description: string;
   imageUrl: string;
-}
-
-interface ThumbnailConfig {
-  enabled: boolean;
-  type: 'text' | 'image';
-  text: string;
-  textColor: string;
-  backgroundColor: string;
-  fontSize: number;
-  imageUrl: string;
-  duration: number; // in seconds
+  isFromDatabase?: boolean; // Track if it's from database
+  databaseId?: number; // Store database ID for deletion
 }
 
 // Custom Success Modal Component for FullClip
@@ -87,7 +77,7 @@ const FullClipSuccessModal: React.FC<{
         
         <div className="space-y-4 mb-6">
           <p className="text-lg text-gray-300">
-            Your complete social media video has been created with all features included.
+            Your complete social media video has been successfully created with all features.
           </p>
           
           <div className="bg-gray-800 border border-gray-600 rounded-lg p-4">
@@ -97,7 +87,7 @@ const FullClipSuccessModal: React.FC<{
           
           <div className="flex items-center justify-center gap-2 text-green-400">
             <CheckCircle className="w-5 h-5" />
-            <span className="font-bold">Audio, Captions, Avatar & Thumbnail Included</span>
+            <span className="font-bold">Audio, Captions & Avatar Included</span>
           </div>
         </div>
         
@@ -140,28 +130,22 @@ const FullClipStudio: React.FC<FullClipStudioProps> = ({
   const [isProcessingVideo, setIsProcessingVideo] = useState(false);
   const [processingProgress, setProcessingProgress] = useState('');
   
-  // Avatar state
+  // Avatar functionality
   const [selectedAvatar, setSelectedAvatar] = useState<PenguinAvatar | null>(null);
   const [avatarPosition, setAvatarPosition] = useState<'bottom-left' | 'bottom-right' | 'top-left' | 'top-right'>('bottom-right');
-  const [avatarSize, setAvatarSize] = useState(25); // Percentage
+  const [avatarSize, setAvatarSize] = useState(25);
   const [isGeneratingAvatar, setIsGeneratingAvatar] = useState(false);
   const [customAvatarPrompt, setCustomAvatarPrompt] = useState('');
   const [generatedAvatars, setGeneratedAvatars] = useState<PenguinAvatar[]>([]);
   const [uploadedAvatars, setUploadedAvatars] = useState<PenguinAvatar[]>([]);
   
-  // Thumbnail state
-  const [thumbnailConfig, setThumbnailConfig] = useState<ThumbnailConfig>({
-    enabled: false,
-    type: 'text',
-    text: 'CodeStream',
-    textColor: '#FFFFFF',
-    backgroundColor: '#000000',
-    fontSize: 48,
-    imageUrl: '',
-    duration: 2
-  });
+  // Thumbnail functionality
+  const [thumbnailEnabled, setThumbnailEnabled] = useState(false);
+  const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
+  const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null);
+  const [thumbnailDuration, setThumbnailDuration] = useState(3); // seconds
   
-  // Caption controls
+  // Simplified caption controls
   const [captionsEnabled, setCaptionsEnabled] = useState(true);
   const [captionTextColor, setCaptionTextColor] = useState('#FFFFFF');
   const [captionBackgroundColor, setCaptionBackgroundColor] = useState('#000000');
@@ -174,9 +158,9 @@ const FullClipStudio: React.FC<FullClipStudioProps> = ({
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const thumbnailFileInputRef = useRef<HTMLInputElement>(null);
+  const thumbnailInputRef = useRef<HTMLInputElement>(null);
 
-  // Preset penguin avatars
+  // RESTORED: Original preset penguin avatars
   const presetAvatars: PenguinAvatar[] = [
     {
       id: 'avatar1',
@@ -237,6 +221,13 @@ const FullClipStudio: React.FC<FullClipStudioProps> = ({
     }
   }, [elevenLabsApiKey]);
 
+  // FIXED: Load uploaded avatars from database when component opens
+  useEffect(() => {
+    if (isOpen) {
+      loadUploadedAvatars();
+    }
+  }, [isOpen]);
+
   // Audio time tracking
   useEffect(() => {
     const audio = audioRef.current;
@@ -263,6 +254,34 @@ const FullClipStudio: React.FC<FullClipStudioProps> = ({
     };
   }, [audioUrl]);
 
+  // FIXED: Load uploaded avatars from database
+  const loadUploadedAvatars = async () => {
+    try {
+      console.log('Loading uploaded avatars from database...');
+      const avatarsFromDb = await dbManager.getAllAvatars();
+      
+      const uploadedAvatarsList: PenguinAvatar[] = avatarsFromDb.map(avatar => {
+        // Convert Uint8Array to blob and create object URL
+        const blob = new Blob([avatar.image_data], { type: avatar.image_type });
+        const imageUrl = URL.createObjectURL(blob);
+        
+        return {
+          id: `db-${avatar.id}`,
+          name: avatar.name,
+          description: avatar.description,
+          imageUrl: imageUrl,
+          isFromDatabase: true,
+          databaseId: avatar.id
+        };
+      });
+      
+      setUploadedAvatars(uploadedAvatarsList);
+      console.log('Loaded', uploadedAvatarsList.length, 'uploaded avatars from database');
+    } catch (error) {
+      console.error('Failed to load uploaded avatars:', error);
+    }
+  };
+
   const loadVoices = async () => {
     try {
       const response = await fetch('https://api.elevenlabs.io/v1/voices', {
@@ -278,6 +297,7 @@ const FullClipStudio: React.FC<FullClipStudioProps> = ({
       const data = await response.json();
       setAvailableVoices(data.voices || []);
       
+      // Select first voice by default
       if (data.voices && data.voices.length > 0) {
         setSelectedVoice(data.voices[0].voice_id);
       }
@@ -297,6 +317,8 @@ const FullClipStudio: React.FC<FullClipStudioProps> = ({
     setProcessingProgress('Analyzing file content...');
     
     try {
+      console.log('Generating AI script with Grok using actual file content...');
+      
       const language = selectedVideo.file_language;
       const filename = selectedVideo.original_filename;
       const duration = selectedVideo.duration;
@@ -375,6 +397,8 @@ Write ONLY the script text in a natural, conversational tone that fits exactly $
         throw new Error('No script generated from XAI API');
       }
 
+      console.log('AI script generated successfully based on actual file content');
+      
       const finalScript = generatedScript.trim();
       const wordCount = finalScript.split(/\s+/).length;
       
@@ -485,71 +509,71 @@ Write ONLY the script text in a natural, conversational tone that fits exactly $
     }
   };
 
-  // Handle image file upload for avatars
-  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  // FIXED: Handle image file upload and save to database
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
     
-    files.forEach(file => {
+    for (const file of files) {
       if (file.type.startsWith('image/')) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const imageUrl = e.target?.result as string;
+        try {
+          // Save to database first
+          const avatarId = await dbManager.saveAvatar(
+            file.name.replace(/\.[^/.]+$/, ''), // Remove file extension for name
+            `Uploaded image: ${file.name}`,
+            file,
+            'uploaded'
+          );
           
-          const newAvatar: PenguinAvatar = {
-            id: `uploaded-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            name: file.name.replace(/\.[^/.]+$/, ''),
-            description: `Uploaded image: ${file.name}`,
-            imageUrl: imageUrl
-          };
+          console.log('Avatar saved to database with ID:', avatarId);
           
-          setUploadedAvatars(prev => [...prev, newAvatar]);
-          setSelectedAvatar(newAvatar);
-        };
-        
-        reader.onerror = (error) => {
-          console.error('Error reading image file:', error);
-          alert('Failed to read image file. Please try again.');
-        };
-        
-        reader.readAsDataURL(file);
+          // Reload avatars from database to get the new one
+          await loadUploadedAvatars();
+          
+          alert(`✅ Avatar "${file.name}" saved successfully and will persist across app restarts!`);
+        } catch (error) {
+          console.error('Error saving avatar to database:', error);
+          alert('Failed to save avatar to database. Please try again.');
+        }
       } else {
         alert('Please select a valid image file (PNG, JPG, GIF, etc.)');
       }
-    });
+    }
     
+    // Reset input
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
   };
 
-  // Handle thumbnail image upload
-  const handleThumbnailImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    if (file.type.startsWith('image/')) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const imageUrl = e.target?.result as string;
-        setThumbnailConfig(prev => ({
-          ...prev,
-          type: 'image',
-          imageUrl: imageUrl
-        }));
-      };
-      
-      reader.onerror = (error) => {
-        console.error('Error reading thumbnail image:', error);
-        alert('Failed to read thumbnail image. Please try again.');
-      };
-      
-      reader.readAsDataURL(file);
-    } else {
-      alert('Please select a valid image file (PNG, JPG, GIF, etc.)');
+  // FIXED: Handle avatar deletion from database
+  const handleDeleteAvatar = async (avatar: PenguinAvatar) => {
+    if (!avatar.isFromDatabase || !avatar.databaseId) {
+      // For non-database avatars (generated ones), just remove from state
+      setGeneratedAvatars(prev => prev.filter(a => a.id !== avatar.id));
+      if (selectedAvatar?.id === avatar.id) {
+        setSelectedAvatar(null);
+      }
+      return;
     }
-    
-    if (thumbnailFileInputRef.current) {
-      thumbnailFileInputRef.current.value = '';
+
+    try {
+      const success = await dbManager.deleteAvatar(avatar.databaseId);
+      if (success) {
+        // Reload avatars from database
+        await loadUploadedAvatars();
+        
+        // Clear selection if this avatar was selected
+        if (selectedAvatar?.id === avatar.id) {
+          setSelectedAvatar(null);
+        }
+        
+        console.log('Avatar deleted from database successfully');
+      } else {
+        throw new Error('Delete operation failed');
+      }
+    } catch (error) {
+      console.error('Failed to delete avatar:', error);
+      alert('Failed to delete avatar. Please try again.');
     }
   };
 
@@ -563,6 +587,8 @@ Write ONLY the script text in a natural, conversational tone that fits exactly $
     setProcessingProgress('Generating custom penguin avatar...');
     
     try {
+      console.log('Generating custom penguin avatar with Grok Vision...');
+      
       const enhancedPrompt = `Create a 3d 8bit block style cool penguin with glasses as an avatar for a coding video. ${customAvatarPrompt}. The penguin should be friendly, professional, and suitable for educational content. Style: clean cartoon illustration, high quality, suitable for video overlay.`;
 
       const response = await fetch('https://api.x.ai/v1/images/generations', {
@@ -596,6 +622,8 @@ Write ONLY the script text in a natural, conversational tone that fits exactly $
       if (!imageUrl) {
         throw new Error('No image generated from XAI API - check response format');
       }
+
+      console.log('Custom penguin avatar generated successfully:', imageUrl);
       
       const newAvatar: PenguinAvatar = {
         id: `custom-${Date.now()}`,
@@ -633,36 +661,50 @@ Write ONLY the script text in a natural, conversational tone that fits exactly $
     }
   };
 
-  // Create a fallback avatar image when CORS fails
+  const handleThumbnailUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file && file.type.startsWith('image/')) {
+      setThumbnailFile(file);
+      
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setThumbnailPreview(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      alert('Please select a valid image file for the thumbnail.');
+    }
+    
+    // Reset input
+    if (thumbnailInputRef.current) {
+      thumbnailInputRef.current.value = '';
+    }
+  };
+
   const createFallbackAvatar = (description: string): HTMLImageElement => {
     const canvas = document.createElement('canvas');
     canvas.width = 100;
     canvas.height = 100;
     const ctx = canvas.getContext('2d')!;
     
-    // Draw a simple penguin-like shape
     ctx.fillStyle = '#333333';
     ctx.fillRect(0, 0, 100, 100);
     
-    // Draw penguin body
     ctx.fillStyle = '#000000';
     ctx.beginPath();
     ctx.ellipse(50, 70, 25, 30, 0, 0, 2 * Math.PI);
     ctx.fill();
     
-    // Draw penguin head
     ctx.fillStyle = '#000000';
     ctx.beginPath();
     ctx.ellipse(50, 35, 20, 20, 0, 0, 2 * Math.PI);
     ctx.fill();
     
-    // Draw white belly
     ctx.fillStyle = '#FFFFFF';
     ctx.beginPath();
     ctx.ellipse(50, 70, 15, 20, 0, 0, 2 * Math.PI);
     ctx.fill();
     
-    // Draw orange beak
     ctx.fillStyle = '#FFA500';
     ctx.beginPath();
     ctx.moveTo(50, 35);
@@ -671,7 +713,6 @@ Write ONLY the script text in a natural, conversational tone that fits exactly $
     ctx.closePath();
     ctx.fill();
     
-    // Draw eyes
     ctx.fillStyle = '#FFFFFF';
     ctx.beginPath();
     ctx.ellipse(45, 30, 3, 3, 0, 0, 2 * Math.PI);
@@ -680,7 +721,6 @@ Write ONLY the script text in a natural, conversational tone that fits exactly $
     ctx.ellipse(55, 30, 3, 3, 0, 0, 2 * Math.PI);
     ctx.fill();
     
-    // Add text
     ctx.fillStyle = '#FFFFFF';
     ctx.font = '10px Arial';
     ctx.textAlign = 'center';
@@ -692,38 +732,24 @@ Write ONLY the script text in a natural, conversational tone that fits exactly $
     return img;
   };
 
-  const processCompleteVideo = async () => {
+  const combineVideoWithAudioAndAvatar = async () => {
     if (!selectedVideo || !audioBlob) {
       alert('Please select a video and generate audio first.');
       return;
     }
 
     setIsProcessingVideo(true);
-    setProcessingProgress('Preparing complete video...');
+    setProcessingProgress('Preparing video and audio...');
     
     try {
-      console.log('Starting complete video processing...');
+      console.log('Starting video-audio-avatar combination process...');
       
-      // Parse captions
-      let captionSegments: any[] = [];
-      try {
-        if (captions.length > 0) {
-          captionSegments = captions.map((cap: any) => ({
-            start: cap.startTime || cap.start || 0,
-            end: cap.endTime || cap.end || 0,
-            text: cap.text || ''
-          }));
-        }
-      } catch (error) {
-        console.warn('Failed to parse captions:', error);
-      }
-      
-      // Create video element for the original video
       const videoBlob = new Blob([selectedVideo.video_blob], { type: 'video/mp4' });
       const videoUrl = URL.createObjectURL(videoBlob);
       
       const video = document.createElement('video');
       video.src = videoUrl;
+      video.muted = true;
       video.crossOrigin = 'anonymous';
       
       setProcessingProgress('Loading video...');
@@ -737,7 +763,27 @@ Write ONLY the script text in a natural, conversational tone that fits exactly $
         video.load();
       });
 
-      // Load avatar image if selected
+      const canvas = canvasRef.current!;
+      const ctx = canvas.getContext('2d')!;
+      canvas.width = 720;
+      canvas.height = 1280;
+
+      setProcessingProgress('Loading audio...');
+
+      const audio = document.createElement('audio');
+      audio.src = URL.createObjectURL(audioBlob);
+      audio.crossOrigin = 'anonymous';
+      
+      await new Promise((resolve, reject) => {
+        audio.onloadedmetadata = () => {
+          console.log('Audio loaded:', audio.duration, 'seconds');
+          resolve(void 0);
+        };
+        audio.onerror = reject;
+        audio.load();
+      });
+
+      // Load avatar if selected
       let avatarImg: HTMLImageElement | null = null;
       if (selectedAvatar) {
         setProcessingProgress('Loading avatar...');
@@ -760,11 +806,7 @@ Write ONLY the script text in a natural, conversational tone that fits exactly $
               reject(new Error('Failed to load avatar image'));
             };
             
-            if (selectedAvatar.imageUrl.startsWith('data:')) {
-              avatarImg!.src = selectedAvatar.imageUrl;
-            } else {
-              avatarImg!.src = selectedAvatar.imageUrl;
-            }
+            avatarImg!.src = selectedAvatar.imageUrl;
           });
         } catch (error) {
           console.warn('Failed to load avatar image, using fallback:', error);
@@ -781,58 +823,63 @@ Write ONLY the script text in a natural, conversational tone that fits exactly $
         }
       }
 
-      // Load thumbnail image if enabled
+      // Load thumbnail if enabled
       let thumbnailImg: HTMLImageElement | null = null;
-      if (thumbnailConfig.enabled && thumbnailConfig.type === 'image' && thumbnailConfig.imageUrl) {
+      if (thumbnailEnabled && thumbnailFile) {
         setProcessingProgress('Loading thumbnail...');
         try {
           thumbnailImg = new Image();
+          const thumbnailUrl = URL.createObjectURL(thumbnailFile);
+          
           await new Promise((resolve, reject) => {
-            thumbnailImg!.onload = () => resolve(void 0);
+            thumbnailImg!.onload = () => {
+              console.log('Thumbnail loaded successfully');
+              resolve(void 0);
+            };
             thumbnailImg!.onerror = reject;
-            thumbnailImg!.src = thumbnailConfig.imageUrl;
+            thumbnailImg!.src = thumbnailUrl;
           });
         } catch (error) {
-          console.warn('Failed to load thumbnail image:', error);
+          console.warn('Failed to load thumbnail:', error);
           thumbnailImg = null;
         }
       }
 
-      // Set up canvas for rendering
-      const canvas = canvasRef.current!;
-      const ctx = canvas.getContext('2d')!;
-      canvas.width = 720;
-      canvas.height = 1280;
-
-      setProcessingProgress('Setting up audio recording...');
-
-      // Create audio element
-      const audio = document.createElement('audio');
-      audio.src = URL.createObjectURL(audioBlob);
-      audio.crossOrigin = 'anonymous';
-      
-      await new Promise((resolve, reject) => {
-        audio.onloadedmetadata = () => {
-          console.log('Audio loaded:', audio.duration, 'seconds');
-          resolve(void 0);
-        };
-        audio.onerror = reject;
-        audio.load();
-      });
-
-      // Determine the final duration
       const finalDuration = Math.max(video.duration, audio.duration);
       console.log('Final video duration will be:', finalDuration, 'seconds');
 
-      // Set up MediaRecorder
+      setProcessingProgress('Setting up recording...');
+
       const stream = canvas.captureStream(30);
       
       let mimeType = 'video/mp4';
+      let codecOptions = {};
+      
       if (MediaRecorder.isTypeSupported('video/mp4;codecs=avc1.42E01E')) {
         mimeType = 'video/mp4;codecs=avc1.42E01E';
+        codecOptions = {
+          mimeType: mimeType,
+          videoBitsPerSecond: 2500000,
+          audioBitsPerSecond: 128000
+        };
+      } else if (MediaRecorder.isTypeSupported('video/mp4')) {
+        mimeType = 'video/mp4';
+        codecOptions = {
+          mimeType: mimeType,
+          videoBitsPerSecond: 2500000,
+          audioBitsPerSecond: 128000
+        };
+      } else {
+        mimeType = 'video/webm;codecs=vp9,opus';
+        codecOptions = {
+          mimeType: mimeType,
+          videoBitsPerSecond: 2500000,
+          audioBitsPerSecond: 128000
+        };
       }
+      
+      console.log('Using codec:', mimeType);
 
-      // Create audio context for mixing
       const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
       const audioSource = audioContext.createMediaElementSource(audio);
       const destination = audioContext.createMediaStreamDestination();
@@ -842,19 +889,17 @@ Write ONLY the script text in a natural, conversational tone that fits exactly $
       const audioTrack = destination.stream.getAudioTracks()[0];
       if (audioTrack) {
         stream.addTrack(audioTrack);
+        console.log('Audio track added to stream');
       }
 
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: mimeType,
-        videoBitsPerSecond: 2500000,
-        audioBitsPerSecond: 128000
-      });
+      const mediaRecorder = new MediaRecorder(stream, codecOptions);
 
       const chunks: Blob[] = [];
       
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
           chunks.push(event.data);
+          console.log('Recorded chunk:', event.data.size, 'bytes');
         }
       };
 
@@ -865,6 +910,8 @@ Write ONLY the script text in a natural, conversational tone that fits exactly $
         const finalBlob = new Blob(chunks, { 
           type: 'video/mp4'
         });
+        
+        console.log('Final video size:', finalBlob.size, 'bytes');
         
         setProcessingProgress('Saving to gallery...');
         
@@ -886,7 +933,7 @@ Write ONLY the script text in a natural, conversational tone that fits exactly $
             displayName
           );
 
-          console.log('FullClip video saved successfully with ID:', videoId);
+          console.log('FullClip video saved successfully with ID:', videoId, 'display name:', displayName);
           
           onVideoSaved();
           
@@ -898,31 +945,31 @@ Write ONLY the script text in a natural, conversational tone that fits exactly $
           alert('Video was created but failed to save to gallery. Please try again.');
         }
         
-        // Cleanup
         URL.revokeObjectURL(videoUrl);
         URL.revokeObjectURL(audio.src);
         audioContext.close();
       };
 
-      // Start recording
+      mediaRecorder.onerror = (event) => {
+        console.error('MediaRecorder error:', event);
+        alert('Recording failed. Please try again.');
+      };
+
       console.log('Starting recording...');
-      setProcessingProgress('Recording complete video...');
+      setProcessingProgress('Recording video with audio...');
       mediaRecorder.start(100);
       
-      // Reset and start playback
       video.currentTime = 0;
       audio.currentTime = 0;
       
       const startTime = Date.now();
       const maxDuration = finalDuration * 1000;
       
-      // Start playback
       const playPromises = [video.play(), audio.play()];
       await Promise.all(playPromises);
       
       console.log('Playback started, beginning render loop...');
 
-      // Render loop with all features
       const renderFrame = () => {
         const elapsed = Date.now() - startTime;
         const progress = elapsed / maxDuration;
@@ -944,51 +991,23 @@ Write ONLY the script text in a natural, conversational tone that fits exactly $
         ctx.fillStyle = '#000000';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // Show thumbnail at the beginning if enabled
-        const showThumbnail = thumbnailConfig.enabled && currentVideoTime < thumbnailConfig.duration;
-
-        if (showThumbnail) {
-          // Draw thumbnail
-          if (thumbnailConfig.type === 'text') {
-            // Text thumbnail
-            ctx.fillStyle = thumbnailConfig.backgroundColor;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
-            ctx.fillStyle = thumbnailConfig.textColor;
-            ctx.font = `bold ${thumbnailConfig.fontSize}px Arial`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            
-            // Word wrap for long text
-            const words = thumbnailConfig.text.split(' ');
-            const lines: string[] = [];
-            let currentLine = '';
-            
-            for (const word of words) {
-              const testLine = currentLine + (currentLine ? ' ' : '') + word;
-              const metrics = ctx.measureText(testLine);
-              
-              if (metrics.width > canvas.width - 80 && currentLine) {
-                lines.push(currentLine);
-                currentLine = word;
-              } else {
-                currentLine = testLine;
-              }
-            }
-            if (currentLine) {
-              lines.push(currentLine);
-            }
-
-            const lineHeight = thumbnailConfig.fontSize * 1.2;
-            const startY = (canvas.height - (lines.length * lineHeight)) / 2;
-
-            lines.forEach((line, index) => {
-              ctx.fillText(line, canvas.width / 2, startY + (index * lineHeight));
-            });
-          } else if (thumbnailConfig.type === 'image' && thumbnailImg) {
-            // Image thumbnail
-            ctx.drawImage(thumbnailImg, 0, 0, canvas.width, canvas.height);
-          }
+        // Show thumbnail for the first few seconds
+        if (thumbnailEnabled && thumbnailImg && currentVideoTime < thumbnailDuration) {
+          // Draw thumbnail as full background
+          ctx.drawImage(thumbnailImg, 0, 0, canvas.width, canvas.height);
+          
+          // Add overlay text
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+          ctx.fillRect(0, canvas.height - 200, canvas.width, 200);
+          
+          ctx.fillStyle = '#FFFFFF';
+          ctx.font = 'bold 32px Arial';
+          ctx.textAlign = 'center';
+          ctx.fillText('Starting in...', canvas.width / 2, canvas.height - 120);
+          
+          const countdown = Math.ceil(thumbnailDuration - currentVideoTime);
+          ctx.font = 'bold 48px Arial';
+          ctx.fillText(countdown.toString(), canvas.width / 2, canvas.height - 60);
         } else {
           // Draw video frame
           if (video.readyState >= 2) {
@@ -1022,30 +1041,26 @@ Write ONLY the script text in a natural, conversational tone that fits exactly $
                 break;
             }
 
-            // Add simple animation (bobbing effect)
             const animationTime = elapsed * 0.003;
             const bobOffset = Math.sin(animationTime) * 5;
             avatarY += bobOffset;
 
-            // Draw avatar with slight transparency
             ctx.globalAlpha = 0.9;
             ctx.drawImage(avatarImg, avatarX, avatarY, avatarWidth, avatarHeight);
             ctx.globalAlpha = 1;
           }
 
-          // FIXED: Draw captions OVER the avatar (higher z-index)
-          if (captionsEnabled && captionSegments.length > 0) {
-            const currentCaptions = captionSegments.filter(caption => 
-              currentVideoTime >= caption.start && currentVideoTime <= caption.end
+          // FIXED: Draw captions OVER the avatar (after avatar)
+          if (captionsEnabled && captions.length > 0) {
+            const currentCaptions = captions.filter(caption => 
+              currentVideoTime >= caption.startTime && currentVideoTime <= caption.endTime
             );
 
             currentCaptions.forEach(caption => {
-              // Set up caption styling
               ctx.font = 'bold 28px Arial';
               ctx.textAlign = 'center';
               ctx.textBaseline = 'bottom';
 
-              // Split text into words for better wrapping
               const words = caption.text.split(' ');
               const lines: string[] = [];
               let currentLine = '';
@@ -1065,20 +1080,18 @@ Write ONLY the script text in a natural, conversational tone that fits exactly $
                 lines.push(currentLine);
               }
 
-              // Draw each line
               const lineHeight = 35;
-              const startY = canvas.height - 80; // Position at bottom
+              const startY = canvas.height - 80;
 
               lines.forEach((line, index) => {
                 const y = startY - (lines.length - 1 - index) * lineHeight;
                 const x = canvas.width / 2;
 
-                // Measure text for background
                 const textWidth = ctx.measureText(line).width;
                 const padding = 15;
 
-                // FIXED: Draw caption background with higher opacity for better visibility over avatar
-                ctx.fillStyle = captionBackgroundColor + 'F0'; // 94% opacity (higher than before)
+                // FIXED: Enhanced background opacity and text shadow for better visibility over avatar
+                ctx.fillStyle = captionBackgroundColor + 'F0'; // 94% opacity (was E6 = 90%)
                 ctx.fillRect(
                   x - textWidth / 2 - padding,
                   y - 30,
@@ -1086,11 +1099,12 @@ Write ONLY the script text in a natural, conversational tone that fits exactly $
                   lineHeight + 5
                 );
 
-                // FIXED: Draw caption text with shadow for better readability over avatar
-                ctx.shadowColor = '#000000';
+                // FIXED: Add text shadow for better contrast over avatar
+                ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
                 ctx.shadowBlur = 4;
                 ctx.shadowOffsetX = 2;
                 ctx.shadowOffsetY = 2;
+                
                 ctx.fillStyle = captionTextColor;
                 ctx.fillText(line, x, y);
                 
@@ -1110,8 +1124,8 @@ Write ONLY the script text in a natural, conversational tone that fits exactly $
       renderFrame();
 
     } catch (error) {
-      console.error('Failed to process complete video:', error);
-      alert(`Failed to process video: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error('Failed to combine video with audio and avatar:', error);
+      alert(`Failed to combine video: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsProcessingVideo(false);
       setProcessingProgress('');
@@ -1122,7 +1136,6 @@ Write ONLY the script text in a natural, conversational tone that fits exactly $
     setShowSuccessModal(false);
     onClose();
     
-    // Open FullClip Gallery
     setTimeout(() => {
       window.dispatchEvent(new CustomEvent('openFullClipGallery'));
     }, 300);
@@ -1176,10 +1189,10 @@ Write ONLY the script text in a natural, conversational tone that fits exactly $
               <div className="bg-black border-2 border-white rounded-xl p-8 max-w-md text-center">
                 <div className="flex items-center justify-center gap-3 mb-4">
                   <Loader2 className="w-8 h-8 text-white animate-spin" />
-                  <h3 className="text-2xl font-bold text-white">Creating FullClip</h3>
+                  <h3 className="text-2xl font-bold text-white">Processing Video</h3>
                 </div>
                 <p className="text-lg text-gray-300 mb-4">
-                  {processingProgress || 'Processing your complete video with all features...'}
+                  {processingProgress || 'Creating your complete social media video...'}
                 </p>
                 <div className="w-full bg-gray-600 h-2 rounded mb-4">
                   <div className="bg-white h-2 rounded animate-pulse" style={{ width: '100%' }} />
@@ -1242,7 +1255,26 @@ Write ONLY the script text in a natural, conversational tone that fits exactly $
                       </option>
                     ))}
                   </select>
+                  {availableVoices.length === 0 && elevenLabsApiKey && (
+                    <p className="text-gray-400 text-sm mt-2">Loading voices...</p>
+                  )}
                 </div>
+
+                {/* File Content Preview */}
+                {selectedVideo?.original_file_content && (
+                  <div>
+                    <label className="block text-white font-bold mb-2">File Content Analysis</label>
+                    <div className="bg-black border-2 border-white rounded p-3 max-h-32 overflow-y-auto">
+                      <pre className="text-gray-300 text-xs font-mono whitespace-pre-wrap">
+                        {selectedVideo.original_file_content.substring(0, 300)}
+                        {selectedVideo.original_file_content.length > 300 && '...'}
+                      </pre>
+                    </div>
+                    <p className="text-gray-400 text-sm mt-2">
+                      AI will analyze this actual code to create a relevant script
+                    </p>
+                  </div>
+                )}
 
                 {/* Script */}
                 <div>
@@ -1259,7 +1291,7 @@ Write ONLY the script text in a natural, conversational tone that fits exactly $
                       ) : (
                         <Wand2 className="w-4 h-4" />
                       )}
-                      {isGeneratingScript ? 'Analyzing...' : 'AI Generate'}
+                      {isGeneratingScript ? 'Analyzing...' : 'AI Generate with Grok'}
                     </button>
                   </div>
                   <textarea
@@ -1270,12 +1302,17 @@ Write ONLY the script text in a natural, conversational tone that fits exactly $
                   />
                   <div className="flex justify-between text-sm mt-2">
                     <p className="text-gray-400">
-                      Estimated: ~{estimateReadingTime(script)} seconds
+                      Estimated reading time: ~{estimateReadingTime(script)} seconds
                     </p>
                     <p className="text-gray-400">
                       Target: {selectedVideo?.duration || 0} seconds
                     </p>
                   </div>
+                  {script && Math.abs(estimateReadingTime(script) - (selectedVideo?.duration || 0)) > 3 && (
+                    <p className="text-yellow-400 text-sm mt-1">
+                      ⚠️ Script duration doesn't match video duration. Consider regenerating.
+                    </p>
+                  )}
                 </div>
 
                 {/* Audio Generation */}
@@ -1324,240 +1361,17 @@ Write ONLY the script text in a natural, conversational tone that fits exactly $
                     <audio ref={audioRef} src={audioUrl} />
                   </div>
                 )}
+              </div>
+            </div>
 
-                {/* Avatar Selection */}
-                <div>
-                  <label className="block text-white font-bold mb-2">Avatar (Optional)</label>
-                  
-                  {/* Avatar Upload */}
-                  <div className="mb-4">
-                    <button
-                      onClick={() => fileInputRef.current?.click()}
-                      className="flex items-center gap-2 bg-white hover:bg-gray-200 text-black px-4 py-2 rounded font-bold transition-colors border-2 border-white"
-                    >
-                      <Upload className="w-4 h-4" />
-                      Upload Image
-                    </button>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      onChange={handleImageUpload}
-                      className="hidden"
-                    />
-                  </div>
-
-                  {/* Custom Avatar Generation */}
-                  <div className="mb-4">
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={customAvatarPrompt}
-                        onChange={(e) => setCustomAvatarPrompt(e.target.value)}
-                        placeholder="Describe custom avatar (e.g., 'wearing a red hat')"
-                        className="flex-1 p-2 bg-black border-2 border-white text-white rounded text-sm"
-                      />
-                      <button
-                        onClick={generateCustomAvatar}
-                        disabled={isGeneratingAvatar || !xaiApiKey || !customAvatarPrompt.trim()}
-                        className="flex items-center gap-2 bg-white hover:bg-gray-200 disabled:bg-gray-600 
-                                 text-black px-3 py-2 rounded font-bold transition-colors border-2 border-white text-sm"
-                      >
-                        {isGeneratingAvatar ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <Sparkles className="w-4 h-4" />
-                        )}
-                        Generate
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Avatar Grid */}
-                  <div className="grid grid-cols-2 gap-3 max-h-48 overflow-y-auto">
-                    <div
-                      onClick={() => setSelectedAvatar(null)}
-                      className={`cursor-pointer rounded-lg p-3 border-2 transition-all text-center ${
-                        !selectedAvatar 
-                          ? 'border-white bg-white text-black' 
-                          : 'border-gray-600 hover:border-white bg-black text-white'
-                      }`}
-                    >
-                      <div className="text-2xl mb-1">🚫</div>
-                      <p className="text-xs font-bold">No Avatar</p>
-                    </div>
-                    {allAvatars.map(avatar => (
-                      <div
-                        key={avatar.id}
-                        onClick={() => setSelectedAvatar(avatar)}
-                        className={`cursor-pointer rounded-lg p-3 border-2 transition-all ${
-                          selectedAvatar?.id === avatar.id 
-                            ? 'border-white bg-white text-black' 
-                            : 'border-gray-600 hover:border-white bg-black text-white'
-                        }`}
-                      >
-                        <img
-                          src={avatar.imageUrl}
-                          alt={avatar.name}
-                          className="w-full h-16 object-cover rounded mb-2"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iIzMzMzMzMyIvPjx0ZXh0IHg9IjUwIiB5PSI1NSIgZm9udC1zaXplPSIxNCIgZmlsbD0iI2ZmZiIgdGV4dC1hbmNob3I9Im1pZGRsZSI+🐧</text></svg>';
-                          }}
-                        />
-                        <h4 className="font-bold text-xs">{avatar.name}</h4>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Avatar Controls */}
-                  {selectedAvatar && (
-                    <div className="mt-4 space-y-3">
-                      <div>
-                        <label className="block text-white font-bold mb-2">Position</label>
-                        <select
-                          value={avatarPosition}
-                          onChange={(e) => setAvatarPosition(e.target.value as any)}
-                          className="w-full p-2 bg-black border-2 border-white text-white rounded"
-                        >
-                          <option value="bottom-right">Bottom Right</option>
-                          <option value="bottom-left">Bottom Left</option>
-                          <option value="top-right">Top Right</option>
-                          <option value="top-left">Top Left</option>
-                        </select>
-                      </div>
-                      
-                      <div>
-                        <label className="block text-white font-bold mb-2">Size: {avatarSize}%</label>
-                        <input
-                          type="range"
-                          min="15"
-                          max="40"
-                          value={avatarSize}
-                          onChange={(e) => setAvatarSize(Number(e.target.value))}
-                          className="w-full h-2 bg-black border-2 border-white rounded-lg appearance-none cursor-pointer"
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Thumbnail Configuration */}
-                <div>
-                  <div className="flex items-center gap-3 mb-4">
-                    <label className="flex items-center gap-2 text-white font-bold">
-                      <input
-                        type="checkbox"
-                        checked={thumbnailConfig.enabled}
-                        onChange={(e) => setThumbnailConfig(prev => ({ ...prev, enabled: e.target.checked }))}
-                        className="w-5 h-5"
-                      />
-                      Thumbnail (Optional)
-                    </label>
-                  </div>
-
-                  {thumbnailConfig.enabled && (
-                    <div className="space-y-4">
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => setThumbnailConfig(prev => ({ ...prev, type: 'text' }))}
-                          className={`flex-1 py-2 px-4 rounded font-bold transition-colors border-2 ${
-                            thumbnailConfig.type === 'text'
-                              ? 'bg-white text-black border-white'
-                              : 'bg-black text-white border-white hover:bg-white hover:text-black'
-                          }`}
-                        >
-                          <Type className="w-4 h-4 mx-auto" />
-                        </button>
-                        <button
-                          onClick={() => setThumbnailConfig(prev => ({ ...prev, type: 'image' }))}
-                          className={`flex-1 py-2 px-4 rounded font-bold transition-colors border-2 ${
-                            thumbnailConfig.type === 'image'
-                              ? 'bg-white text-black border-white'
-                              : 'bg-black text-white border-white hover:bg-white hover:text-black'
-                          }`}
-                        >
-                          <ImageIcon className="w-4 h-4 mx-auto" />
-                        </button>
-                      </div>
-
-                      {thumbnailConfig.type === 'text' ? (
-                        <div className="space-y-3">
-                          <input
-                            type="text"
-                            value={thumbnailConfig.text}
-                            onChange={(e) => setThumbnailConfig(prev => ({ ...prev, text: e.target.value }))}
-                            placeholder="Thumbnail text"
-                            className="w-full p-3 bg-black border-2 border-white text-white rounded"
-                          />
-                          <div className="grid grid-cols-2 gap-3">
-                            <div>
-                              <label className="block text-white font-bold mb-1 text-sm">Text Color</label>
-                              <input
-                                type="color"
-                                value={thumbnailConfig.textColor}
-                                onChange={(e) => setThumbnailConfig(prev => ({ ...prev, textColor: e.target.value }))}
-                                className="w-full h-8 bg-black border-2 border-white rounded cursor-pointer"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-white font-bold mb-1 text-sm">Background</label>
-                              <input
-                                type="color"
-                                value={thumbnailConfig.backgroundColor}
-                                onChange={(e) => setThumbnailConfig(prev => ({ ...prev, backgroundColor: e.target.value }))}
-                                className="w-full h-8 bg-black border-2 border-white rounded cursor-pointer"
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      ) : (
-                        <div>
-                          <button
-                            onClick={() => thumbnailFileInputRef.current?.click()}
-                            className="w-full flex items-center justify-center gap-2 bg-white hover:bg-gray-200 text-black px-4 py-3 rounded font-bold transition-colors border-2 border-white"
-                          >
-                            <Upload className="w-5 h-5" />
-                            Upload Thumbnail Image
-                          </button>
-                          <input
-                            ref={thumbnailFileInputRef}
-                            type="file"
-                            accept="image/*"
-                            onChange={handleThumbnailImageUpload}
-                            className="hidden"
-                          />
-                          {thumbnailConfig.imageUrl && (
-                            <div className="mt-3">
-                              <img
-                                src={thumbnailConfig.imageUrl}
-                                alt="Thumbnail preview"
-                                className="w-full h-24 object-cover rounded border-2 border-white"
-                              />
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      <div>
-                        <label className="block text-white font-bold mb-2">Duration: {thumbnailConfig.duration}s</label>
-                        <input
-                          type="range"
-                          min="0.5"
-                          max="5"
-                          step="0.5"
-                          value={thumbnailConfig.duration}
-                          onChange={(e) => setThumbnailConfig(prev => ({ ...prev, duration: Number(e.target.value) }))}
-                          className="w-full h-2 bg-black border-2 border-white rounded-lg appearance-none cursor-pointer"
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Caption Controls */}
-                <div>
-                  <div className="flex items-center gap-3 mb-4">
+            {/* Right Panel - Avatar, Thumbnail & Preview */}
+            <div className="w-1/2 flex flex-col">
+              <div className="p-6 border-b-2 border-white">
+                <h3 className="text-2xl font-bold text-white mb-4">Avatar, Thumbnail & Preview</h3>
+                
+                {/* Simplified Caption Controls */}
+                <div className="space-y-4 mb-6">
+                  <div className="flex items-center gap-4">
                     <label className="flex items-center gap-2 text-white font-bold">
                       <input
                         type="checkbox"
@@ -1565,63 +1379,229 @@ Write ONLY the script text in a natural, conversational tone that fits exactly $
                         onChange={(e) => setCaptionsEnabled(e.target.checked)}
                         className="w-5 h-5"
                       />
-                      Captions
+                      Enable Captions
                     </label>
                   </div>
                   
                   {captionsEnabled && (
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-white font-bold mb-2 text-sm">Text Color</label>
+                        <label className="block text-white font-bold mb-2">Text Color</label>
                         <input
                           type="color"
                           value={captionTextColor}
                           onChange={(e) => setCaptionTextColor(e.target.value)}
-                          className="w-full h-8 bg-black border-2 border-white rounded cursor-pointer"
+                          className="w-full h-10 bg-black border-2 border-white rounded cursor-pointer"
                         />
                       </div>
                       <div>
-                        <label className="block text-white font-bold mb-2 text-sm">Background</label>
+                        <label className="block text-white font-bold mb-2">Background Color</label>
                         <input
                           type="color"
                           value={captionBackgroundColor}
                           onChange={(e) => setCaptionBackgroundColor(e.target.value)}
-                          className="w-full h-8 bg-black border-2 border-white rounded cursor-pointer"
+                          className="w-full h-10 bg-black border-2 border-white rounded cursor-pointer"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6">
+                {/* Thumbnail Section */}
+                <div className="mb-6">
+                  <div className="flex items-center gap-4 mb-4">
+                    <label className="flex items-center gap-2 text-white font-bold">
+                      <input
+                        type="checkbox"
+                        checked={thumbnailEnabled}
+                        onChange={(e) => setThumbnailEnabled(e.target.checked)}
+                        className="w-5 h-5"
+                      />
+                      Add Opening Thumbnail
+                    </label>
+                  </div>
+                  
+                  {thumbnailEnabled && (
+                    <div className="space-y-4">
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => thumbnailInputRef.current?.click()}
+                          className="flex items-center gap-2 bg-white hover:bg-gray-200 text-black px-4 py-3 rounded font-bold transition-colors border-2 border-white"
+                        >
+                          <Upload className="w-5 h-5" />
+                          Upload Thumbnail
+                        </button>
+                        <input
+                          ref={thumbnailInputRef}
+                          type="file"
+                          accept="image/*"
+                          onChange={handleThumbnailUpload}
+                          className="hidden"
+                        />
+                      </div>
+                      
+                      <div>
+                        <label className="block text-white font-bold mb-2">Duration: {thumbnailDuration}s</label>
+                        <input
+                          type="range"
+                          min="1"
+                          max="10"
+                          value={thumbnailDuration}
+                          onChange={(e) => setThumbnailDuration(Number(e.target.value))}
+                          className="w-full h-3 bg-black border-2 border-white rounded-lg appearance-none cursor-pointer"
+                        />
+                      </div>
+                      
+                      {thumbnailPreview && (
+                        <div className="border-2 border-white rounded-lg p-2">
+                          <img
+                            src={thumbnailPreview}
+                            alt="Thumbnail preview"
+                            className="w-full h-32 object-cover rounded"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Avatar Section */}
+                <div className="mb-6">
+                  <h4 className="text-white font-bold mb-4">Avatar (Optional)</h4>
+                  
+                  {/* Image Upload Section */}
+                  <div className="mb-4">
+                    <label className="block text-white font-bold mb-2">Upload Your Own Avatar</label>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => fileInputRef.current?.click()}
+                        className="flex items-center gap-2 bg-white hover:bg-gray-200 text-black px-4 py-3 rounded font-bold transition-colors border-2 border-white"
+                      >
+                        <Upload className="w-5 h-5" />
+                        Upload Image
+                      </button>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        onChange={handleImageUpload}
+                        className="hidden"
+                      />
+                    </div>
+                    <p className="text-gray-400 text-sm mt-2">
+                      ✅ Uploaded avatars are saved permanently and persist across app restarts
+                    </p>
+                  </div>
+
+                  {/* Custom Avatar Generation */}
+                  <div className="mb-4">
+                    <label className="block text-white font-bold mb-2">Generate Custom Avatar</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={customAvatarPrompt}
+                        onChange={(e) => setCustomAvatarPrompt(e.target.value)}
+                        placeholder="Describe your penguin (e.g., 'wearing a red hat')"
+                        className="flex-1 p-3 bg-black border-2 border-white text-white rounded"
+                      />
+                      <button
+                        onClick={generateCustomAvatar}
+                        disabled={isGeneratingAvatar || !xaiApiKey || !customAvatarPrompt.trim()}
+                        className="flex items-center gap-2 bg-white hover:bg-gray-200 disabled:bg-gray-600 
+                                 text-black px-4 py-3 rounded font-bold transition-colors border-2 border-white"
+                      >
+                        {isGeneratingAvatar ? (
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                        ) : (
+                          <Sparkles className="w-5 h-5" />
+                        )}
+                        {isGeneratingAvatar ? 'Generating...' : 'Generate'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Avatar Selection */}
+                  <div className="mb-4">
+                    <label className="block text-white font-bold mb-4">Choose Avatar</label>
+                    <div className="grid grid-cols-2 gap-4 max-h-64 overflow-y-auto">
+                      {allAvatars.map(avatar => (
+                        <div
+                          key={avatar.id}
+                          className={`cursor-pointer rounded-lg p-4 border-2 transition-all relative ${
+                            selectedAvatar?.id === avatar.id 
+                              ? 'border-white bg-white text-black' 
+                              : 'border-gray-600 hover:border-white bg-black text-white'
+                          }`}
+                        >
+                          {/* FIXED: Delete button for uploaded avatars */}
+                          {(avatar.isFromDatabase || avatar.id.startsWith('custom-')) && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteAvatar(avatar);
+                              }}
+                              className="absolute top-2 right-2 p-1 bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors"
+                              title="Delete avatar"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          )}
+                          
+                          <div onClick={() => setSelectedAvatar(avatar)}>
+                            <img
+                              src={avatar.imageUrl}
+                              alt={avatar.name}
+                              className="w-full h-24 object-cover rounded mb-2"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iIzMzMzMzMyIvPjx0ZXh0IHg9IjUwIiB5PSI1NSIgZm9udC1zaXplPSIxNCIgZmlsbD0iI2ZmZiIgdGV4dC1hbmNob3I9Im1pZGRsZSI+🐧 Penguin</text></svg>';
+                              }}
+                            />
+                            <h4 className="font-bold text-sm">{avatar.name}</h4>
+                            <p className="text-xs opacity-75">{avatar.description}</p>
+                            {avatar.isFromDatabase && (
+                              <p className="text-xs text-green-400 mt-1">✅ Saved</p>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Avatar Position & Size */}
+                  {selectedAvatar && (
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-white font-bold mb-2">Avatar Position</label>
+                        <select
+                          value={avatarPosition}
+                          onChange={(e) => setAvatarPosition(e.target.value as any)}
+                          className="w-full p-3 bg-black border-2 border-white text-white rounded"
+                        >
+                          <option value="bottom-right">Bottom Right</option>
+                          <option value="bottom-left">Bottom Left</option>
+                          <option value="top-right">Top Right</option>
+                          <option value="top-left">Top Left</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-white font-bold mb-2">Avatar Size: {avatarSize}%</label>
+                        <input
+                          type="range"
+                          min="15"
+                          max="40"
+                          value={avatarSize}
+                          onChange={(e) => setAvatarSize(Number(e.target.value))}
+                          className="w-full h-3 bg-black border-2 border-white rounded-lg appearance-none cursor-pointer"
                         />
                       </div>
                     </div>
                   )}
                 </div>
 
-                {/* Create FullClip Button */}
-                <div className="pt-4">
-                  <button
-                    onClick={processCompleteVideo}
-                    disabled={isProcessingVideo || !selectedVideo || !audioBlob}
-                    className="w-full flex items-center justify-center gap-3 py-4 px-6 rounded-lg font-bold text-lg 
-                             bg-white hover:bg-gray-200 disabled:bg-gray-600 text-black transition-colors border-2 border-white"
-                  >
-                    {isProcessingVideo ? (
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                    ) : (
-                      <Save className="w-5 h-5" />
-                    )}
-                    {isProcessingVideo ? 'Creating...' : 'Create FullClip Video'}
-                  </button>
-                  <p className="text-gray-400 text-sm mt-2 text-center">
-                    ✨ Captions will appear OVER the avatar for perfect readability
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Right Panel - Preview */}
-            <div className="w-1/2 flex flex-col">
-              <div className="p-6 border-b-2 border-white">
-                <h3 className="text-2xl font-bold text-white">Preview</h3>
-              </div>
-              
-              <div className="flex-1 overflow-y-auto p-6">
                 {/* Video Preview */}
                 {selectedVideo && (
                   <div className="mb-6">
@@ -1633,14 +1613,11 @@ Write ONLY the script text in a natural, conversational tone that fits exactly $
                       controls
                       muted
                     />
-                    <p className="text-center text-gray-400 text-sm mt-2">
-                      Original video (audio and features will be added)
-                    </p>
                   </div>
                 )}
 
                 {/* Feature Summary */}
-                <div className="bg-black border-2 border-white rounded-lg p-4">
+                <div className="bg-black border-2 border-white rounded-lg p-4 mb-6">
                   <h4 className="text-white font-bold mb-3">FullClip Features</h4>
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between">
@@ -1669,18 +1646,36 @@ Write ONLY the script text in a natural, conversational tone that fits exactly $
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-400">Thumbnail:</span>
-                      <span className={thumbnailConfig.enabled ? 'text-green-400' : 'text-gray-400'}>
-                        {thumbnailConfig.enabled ? `✓ ${thumbnailConfig.type} (${thumbnailConfig.duration}s)` : 'Disabled'}
+                      <span className={thumbnailEnabled && thumbnailFile ? 'text-green-400' : 'text-gray-400'}>
+                        {thumbnailEnabled && thumbnailFile ? '✓ Added' : 'None'}
                       </span>
                     </div>
                   </div>
-                  
-                  {captionsEnabled && selectedAvatar && (
-                    <div className="mt-3 p-2 bg-green-900/20 border border-green-600 rounded text-xs">
-                      <p className="text-green-400 font-bold">✨ Perfect Layering:</p>
-                      <p className="text-gray-300">Captions will appear OVER the avatar for maximum readability</p>
-                    </div>
-                  )}
+                  <div className="mt-3 p-2 bg-gray-800 rounded text-xs">
+                    <p className="text-gray-400">
+                      ✨ Captions will appear OVER the avatar for perfect readability
+                    </p>
+                  </div>
+                </div>
+
+                {/* Final Processing */}
+                <div>
+                  <button
+                    onClick={combineVideoWithAudioAndAvatar}
+                    disabled={isProcessingVideo || !audioBlob || !selectedVideo}
+                    className="w-full flex items-center justify-center gap-3 py-4 px-6 rounded-lg font-bold text-lg 
+                             bg-white hover:bg-gray-200 disabled:bg-gray-600 text-black transition-colors border-2 border-white"
+                  >
+                    {isProcessingVideo ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <Save className="w-5 h-5" />
+                    )}
+                    {isProcessingVideo ? 'Processing...' : 'Create FullClip Video'}
+                  </button>
+                  <p className="text-gray-400 text-sm mt-2 text-center">
+                    This will create your complete social media video with all features
+                  </p>
                 </div>
               </div>
             </div>

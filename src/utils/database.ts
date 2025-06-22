@@ -41,6 +41,17 @@ export interface ShortsVideoRecord {
   display_name?: string; // NEW: For custom user-friendly names
 }
 
+// NEW: Avatar storage interface
+export interface AvatarRecord {
+  id: number;
+  name: string;
+  description: string;
+  image_data: Uint8Array; // Store the actual image data
+  image_type: string; // MIME type (image/png, image/jpeg, etc.)
+  created_at: string;
+  avatar_type: 'uploaded' | 'generated'; // Track source
+}
+
 class DatabaseManager {
   private db: any = null;
   private SQL: any = null;
@@ -204,9 +215,23 @@ class DatabaseManager {
         }
       }
 
+      // NEW: Avatars table for persistent avatar storage
+      const createAvatarsTableSQL = `
+        CREATE TABLE IF NOT EXISTS avatars (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          description TEXT NOT NULL,
+          image_data BLOB NOT NULL,
+          image_type TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          avatar_type TEXT NOT NULL DEFAULT 'uploaded'
+        );
+      `;
+
       this.db.run(createVideosTableSQL);
       this.db.run(createFullClipVideosTableSQL);
       this.db.run(createShortsVideosTableSQL);
+      this.db.run(createAvatarsTableSQL);
       console.log('Tables created/verified successfully');
       this.saveDatabase();
     } catch (error) {
@@ -698,6 +723,135 @@ class DatabaseManager {
     }
   }
 
+  // NEW: Avatar management methods
+  async saveAvatar(
+    name: string,
+    description: string,
+    imageFile: File,
+    avatarType: 'uploaded' | 'generated' = 'uploaded'
+  ): Promise<number> {
+    try {
+      await this.initialize();
+      console.log('Saving avatar:', { name, description, imageType: imageFile.type, size: imageFile.size, avatarType });
+
+      const arrayBuffer = await imageFile.arrayBuffer();
+      const uint8Array = new Uint8Array(arrayBuffer);
+      const createdAt = new Date().toISOString();
+
+      console.log('Avatar image converted to Uint8Array, size:', uint8Array.length);
+
+      const stmt = this.db.prepare(`
+        INSERT INTO avatars (name, description, image_data, image_type, created_at, avatar_type)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `);
+
+      stmt.run([name, description, uint8Array, imageFile.type, createdAt, avatarType]);
+      
+      // Get the inserted ID
+      const result = this.db.exec("SELECT last_insert_rowid()");
+      const avatarId = result[0].values[0][0];
+
+      stmt.free();
+      await this.saveDatabase();
+
+      console.log('Avatar saved successfully with ID:', avatarId);
+      return avatarId;
+    } catch (error) {
+      console.error('Failed to save avatar:', error);
+      throw error;
+    }
+  }
+
+  async getAllAvatars(): Promise<AvatarRecord[]> {
+    try {
+      await this.initialize();
+      console.log('Loading all avatars...');
+
+      const result = this.db.exec(`
+        SELECT id, name, description, image_data, image_type, created_at, avatar_type
+        FROM avatars
+        ORDER BY created_at DESC
+      `);
+
+      if (!result || result.length === 0) {
+        console.log('No avatars found in database');
+        return [];
+      }
+
+      const avatars: AvatarRecord[] = [];
+      const values = result[0].values;
+
+      for (const row of values) {
+        const avatar: AvatarRecord = {
+          id: row[0] as number,
+          name: row[1] as string,
+          description: row[2] as string,
+          image_data: row[3] as Uint8Array,
+          image_type: row[4] as string,
+          created_at: row[5] as string,
+          avatar_type: (row[6] as string) || 'uploaded'
+        };
+        avatars.push(avatar);
+      }
+
+      console.log('Loaded', avatars.length, 'avatars from database');
+      return avatars;
+    } catch (error) {
+      console.error('Failed to load avatars:', error);
+      return [];
+    }
+  }
+
+  async getAvatar(id: number): Promise<AvatarRecord | null> {
+    try {
+      await this.initialize();
+
+      const result = this.db.exec(`
+        SELECT id, name, description, image_data, image_type, created_at, avatar_type
+        FROM avatars
+        WHERE id = ?
+      `, [id]);
+
+      if (!result || result.length === 0 || result[0].values.length === 0) {
+        return null;
+      }
+
+      const row = result[0].values[0];
+      const avatar: AvatarRecord = {
+        id: row[0] as number,
+        name: row[1] as string,
+        description: row[2] as string,
+        image_data: row[3] as Uint8Array,
+        image_type: row[4] as string,
+        created_at: row[5] as string,
+        avatar_type: (row[6] as string) || 'uploaded'
+      };
+
+      return avatar;
+    } catch (error) {
+      console.error('Failed to get avatar:', error);
+      return null;
+    }
+  }
+
+  async deleteAvatar(id: number): Promise<boolean> {
+    try {
+      await this.initialize();
+      console.log('Deleting avatar with ID:', id);
+
+      this.db.run('DELETE FROM avatars WHERE id = ?', [id]);
+      const changes = this.db.getRowsModified();
+      
+      await this.saveDatabase();
+      console.log('Avatar deleted, rows affected:', changes);
+
+      return changes > 0;
+    } catch (error) {
+      console.error('Failed to delete avatar:', error);
+      return false;
+    }
+  }
+
   async clearAllVideos(): Promise<void> {
     try {
       await this.initialize();
@@ -712,8 +866,20 @@ class DatabaseManager {
     }
   }
 
+  async clearAllAvatars(): Promise<void> {
+    try {
+      await this.initialize();
+      this.db.run('DELETE FROM avatars');
+      await this.saveDatabase();
+      console.log('All avatars cleared from database');
+    } catch (error) {
+      console.error('Failed to clear avatars:', error);
+      throw error;
+    }
+  }
+
   // Debug method to check database status
-  async getStats(): Promise<{ videoCount: number; fullClipCount: number; shortsCount: number; dbSize: number }> {
+  async getStats(): Promise<{ videoCount: number; fullClipCount: number; shortsCount: number; avatarCount: number; dbSize: number }> {
     try {
       await this.initialize();
       
@@ -726,6 +892,9 @@ class DatabaseManager {
       const shortsCountResult = this.db.exec('SELECT COUNT(*) FROM shorts_videos');
       const shortsCount = shortsCountResult[0]?.values[0]?.[0] || 0;
       
+      const avatarCountResult = this.db.exec('SELECT COUNT(*) FROM avatars');
+      const avatarCount = avatarCountResult[0]?.values[0]?.[0] || 0;
+      
       // Get database size from IndexedDB
       let dbSize = 0;
       try {
@@ -735,10 +904,10 @@ class DatabaseManager {
         console.warn('Could not get database size:', error);
       }
       
-      return { videoCount, fullClipCount, shortsCount, dbSize };
+      return { videoCount, fullClipCount, shortsCount, avatarCount, dbSize };
     } catch (error) {
       console.error('Failed to get stats:', error);
-      return { videoCount: 0, fullClipCount: 0, shortsCount: 0, dbSize: 0 };
+      return { videoCount: 0, fullClipCount: 0, shortsCount: 0, avatarCount: 0, dbSize: 0 };
     }
   }
 }
