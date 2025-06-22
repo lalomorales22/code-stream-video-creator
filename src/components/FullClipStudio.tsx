@@ -50,7 +50,7 @@ const FullClipStudio: React.FC<FullClipStudioProps> = ({
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [isGeneratingAvatar, setIsGeneratingAvatar] = useState(false);
   
-  // Step 3: Thumbnail (NEW)
+  // Step 3: Thumbnail
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
   const [thumbnailPreview, setThumbnailPreview] = useState<string>('');
   
@@ -312,7 +312,6 @@ Return only the script text, no additional formatting.`;
     }
   };
 
-  // NEW: Handle thumbnail upload
   const handleThumbnailUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -338,7 +337,7 @@ Return only the script text, no additional formatting.`;
     }
   };
 
-  // FIXED: Generate captions from script
+  // Generate captions from script
   const generateCaptions = (script: string, audioDuration: number): CaptionSegment[] => {
     if (!captionsEnabled || !script.trim()) return [];
 
@@ -363,7 +362,7 @@ Return only the script text, no additional formatting.`;
     return captions;
   };
 
-  // FIXED: Create composite video with all elements
+  // FIXED: Create composite video with proper thumbnail, captions, and confirmation
   const createFullClipVideo = async () => {
     if (!selectedVideo || !audioBlob || !selectedAvatar) {
       setError('Video, audio, and avatar are required');
@@ -406,7 +405,7 @@ Return only the script text, no additional formatting.`;
       setCreationStep('Loading avatar...');
       setCreationProgress(30);
 
-      // Load avatar image - FIXED: Use window.Image() instead of new Image()
+      // Load avatar image
       const avatarImg = new window.Image();
       const avatarBlob = new Blob([selectedAvatar.image_data], { type: selectedAvatar.image_type });
       avatarImg.src = URL.createObjectURL(avatarBlob);
@@ -415,6 +414,21 @@ Return only the script text, no additional formatting.`;
         avatarImg.onload = resolve;
         avatarImg.onerror = reject;
       });
+
+      // FIXED: Load thumbnail image if provided
+      let thumbnailImg: HTMLImageElement | null = null;
+      if (thumbnailFile) {
+        setCreationStep('Loading thumbnail...');
+        setCreationProgress(35);
+        
+        thumbnailImg = new window.Image();
+        thumbnailImg.src = URL.createObjectURL(thumbnailFile);
+        
+        await new Promise((resolve, reject) => {
+          thumbnailImg!.onload = resolve;
+          thumbnailImg!.onerror = reject;
+        });
+      }
 
       setCreationStep('Loading audio...');
       setCreationProgress(40);
@@ -480,6 +494,7 @@ Return only the script text, no additional formatting.`;
       // Animation loop for video composition
       const startTime = Date.now();
       const videoDuration = Math.max(selectedVideo.duration, audioDuration) * 1000; // Convert to ms
+      const thumbnailDuration = 1000; // Show thumbnail for 1 second
       
       const animate = () => {
         const currentTime = Date.now() - startTime;
@@ -489,9 +504,18 @@ Return only the script text, no additional formatting.`;
         ctx.fillStyle = '#000000';
         ctx.fillRect(0, 0, width, height);
 
-        // Draw original video frame
-        originalVideo.currentTime = (progress * selectedVideo.duration);
-        ctx.drawImage(originalVideo, 0, 0, width, height);
+        // FIXED: Show thumbnail for first 1 second, then original video
+        if (thumbnailImg && currentTime < thumbnailDuration) {
+          // Draw thumbnail for first 1 second
+          ctx.drawImage(thumbnailImg, 0, 0, width, height);
+        } else {
+          // Draw original video frame
+          const videoProgress = thumbnailImg ? 
+            Math.max(0, (currentTime - thumbnailDuration) / (videoDuration - thumbnailDuration)) :
+            progress;
+          originalVideo.currentTime = videoProgress * selectedVideo.duration;
+          ctx.drawImage(originalVideo, 0, 0, width, height);
+        }
 
         // Draw avatar
         const avatarX = avatarPosition.includes('right') ? width - avatarSize - 20 : 20;
@@ -511,7 +535,7 @@ Return only the script text, no additional formatting.`;
         ctx.arc(avatarX + avatarSize/2, avatarY + avatarSize/2, avatarSize/2, 0, 2 * Math.PI);
         ctx.stroke();
 
-        // Draw captions
+        // FIXED: Draw captions with proper background
         if (captionsEnabled) {
           const currentTimeSeconds = progress * audioDuration;
           const currentCaption = captions.find(cap => 
@@ -521,16 +545,14 @@ Return only the script text, no additional formatting.`;
           if (currentCaption) {
             ctx.font = `${captionStyle.fontWeight} ${captionStyle.fontSize}px Arial`;
             ctx.textAlign = 'center';
-            ctx.fillStyle = captionStyle.backgroundColor;
-            ctx.strokeStyle = captionStyle.color;
-            ctx.lineWidth = 2;
 
-            const lines = currentCaption.text.split(' ');
+            // Split text into words for better wrapping
+            const words = currentCaption.text.split(' ');
             const wordsPerLine = 4;
             const textLines = [];
             
-            for (let i = 0; i < lines.length; i += wordsPerLine) {
-              textLines.push(lines.slice(i, i + wordsPerLine).join(' '));
+            for (let i = 0; i < words.length; i += wordsPerLine) {
+              textLines.push(words.slice(i, i + wordsPerLine).join(' '));
             }
 
             const lineHeight = captionStyle.fontSize + 8;
@@ -540,11 +562,21 @@ Return only the script text, no additional formatting.`;
             textLines.forEach((line, index) => {
               const y = startY + (index * lineHeight);
               
-              // Background
-              const textWidth = ctx.measureText(line).width;
-              ctx.fillRect(width/2 - textWidth/2 - 10, y - captionStyle.fontSize, textWidth + 20, captionStyle.fontSize + 10);
+              // FIXED: Measure text width for proper background sizing
+              const textMetrics = ctx.measureText(line);
+              const textWidth = textMetrics.width;
+              const padding = 15;
               
-              // Text
+              // Draw background rectangle with proper sizing
+              ctx.fillStyle = captionStyle.backgroundColor;
+              ctx.fillRect(
+                width/2 - textWidth/2 - padding, 
+                y - captionStyle.fontSize - 5, 
+                textWidth + (padding * 2), 
+                captionStyle.fontSize + 15
+              );
+              
+              // Draw text
               ctx.fillStyle = captionStyle.color;
               ctx.fillText(line, width/2, y);
             });
@@ -600,18 +632,31 @@ Return only the script text, no additional formatting.`;
 
       setCreationProgress(100);
       setCreationStep('Complete!');
-      setSuccess('FullClip video created successfully with audio, captions, and avatar!');
+      
+      // FIXED: Show success confirmation message
+      setSuccess(`🎬 FullClip video created successfully! 
+      
+✅ Audio narration included
+✅ Captions synchronized  
+✅ Avatar positioned ${avatarPosition}
+${thumbnailFile ? '✅ Thumbnail intro (1 second)' : ''}
+✅ Saved to FullClip Gallery
+
+Your professional social media video is ready to download and share!`);
       
       // Cleanup
       URL.revokeObjectURL(originalVideo.src);
       URL.revokeObjectURL(avatarImg.src);
+      if (thumbnailImg) {
+        URL.revokeObjectURL(thumbnailImg.src);
+      }
       
       onVideoSaved?.();
       
-      // Reset form after delay
+      // Auto-close after showing success message
       setTimeout(() => {
         onClose();
-      }, 3000);
+      }, 5000);
       
     } catch (error) {
       console.error('Failed to create FullClip video:', error);
@@ -687,7 +732,7 @@ Return only the script text, no additional formatting.`;
         {success && (
           <div className="mx-6 mt-4 bg-black border-2 border-green-500 rounded-lg p-4 flex items-center gap-3">
             <CheckCircle className="w-6 h-6 text-green-500 flex-shrink-0" />
-            <span className="text-green-500 font-medium">{success}</span>
+            <div className="text-green-500 font-medium whitespace-pre-line">{success}</div>
             <button
               onClick={() => setSuccess(null)}
               className="ml-auto text-green-500 hover:bg-green-500 hover:text-black p-1 rounded"
@@ -945,7 +990,7 @@ Return only the script text, no additional formatting.`;
                 )}
               </div>
 
-              {/* Step 3: Thumbnail Upload (NEW) */}
+              {/* Step 3: Thumbnail Upload */}
               <div className={`bg-black border-2 rounded-xl p-6 ${isStepComplete(3) ? 'border-green-500' : 'border-white'}`}>
                 <div className="flex items-center gap-3 mb-4">
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${
@@ -964,7 +1009,7 @@ Return only the script text, no additional formatting.`;
                   >
                     <Image className="w-8 h-8" />
                     <span>Upload Thumbnail Image</span>
-                    <span className="text-sm opacity-75">Recommended: 720x1280 (9:16)</span>
+                    <span className="text-sm opacity-75">Shows for 1 second at video start</span>
                   </button>
                 ) : (
                   <div className="space-y-3">
@@ -1042,6 +1087,15 @@ Return only the script text, no additional formatting.`;
                           className="w-full h-10 rounded border-2 border-white"
                         />
                       </div>
+                      <div>
+                        <label className="block text-white font-bold mb-2">Background Color</label>
+                        <input
+                          type="color"
+                          value={captionStyle.backgroundColor}
+                          onChange={(e) => setCaptionStyle(prev => ({ ...prev, backgroundColor: e.target.value }))}
+                          className="w-full h-10 rounded border-2 border-white"
+                        />
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1078,7 +1132,7 @@ Return only the script text, no additional formatting.`;
             <div className="flex-1 overflow-y-auto">
               <div className="flex items-center justify-center p-8 min-h-full">
                 {selectedVideo ? (
-                  <div className="w-full max-w-lg"> {/* LARGER: Increased from max-w-md */}
+                  <div className="w-full max-w-lg">
                     <div className="relative">
                       <video
                         ref={videoRef}
