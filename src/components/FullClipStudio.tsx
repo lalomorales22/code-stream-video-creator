@@ -142,7 +142,21 @@ const FullClipStudio: React.FC<FullClipStudioProps> = ({
     setError(null);
 
     try {
+      // FIXED: Enhanced prompt to avoid symbols and ensure voice-friendly text
       const prompt = `Analyze this ${selectedVideo.file_language} code and create a 30-45 second engaging narration script for a social media video. Focus on what the code actually does, mention specific functions, variables, and logic patterns you see. Make it conversational and educational.
+
+CRITICAL REQUIREMENTS FOR VOICE SYNTHESIS:
+- Use ONLY standard words and letters - NO symbols, emojis, or special characters
+- For URLs like "example.com" say "example dot com"
+- For file extensions like ".js" say "dot js" or "JavaScript file"
+- For operators like "==" say "equals equals" or "double equals"
+- For symbols like "@" say "at symbol" or "at sign"
+- For "#" say "hashtag" or "number sign"
+- For "&" say "and"
+- For "%" say "percent"
+- Spell out ALL punctuation and symbols in words
+- Keep sentences natural and conversational
+- Avoid technical jargon that might be hard to pronounce
 
 Code to analyze:
 ${selectedVideo.original_file_content}
@@ -153,8 +167,9 @@ Create a script that:
 3. Is engaging for social media (TikTok, Instagram, YouTube Shorts)
 4. Is exactly 30-45 seconds when spoken at normal pace
 5. Sounds natural and conversational
+6. Uses only voice-friendly words and phrases
 
-Return only the script text, no additional formatting.`;
+Return only the script text with NO symbols, emojis, or special characters.`;
 
       const response = await fetch('https://api.x.ai/v1/chat/completions', {
         method: 'POST',
@@ -180,9 +195,15 @@ Return only the script text, no additional formatting.`;
       }
 
       const data = await response.json();
-      const generatedScript = data.choices?.[0]?.message?.content?.trim();
+      let generatedScript = data.choices?.[0]?.message?.content?.trim();
       
       if (generatedScript) {
+        // FIXED: Clean up any remaining symbols that might cause voice issues
+        generatedScript = generatedScript
+          .replace(/[^\w\s.,!?-]/g, ' ') // Remove special characters except basic punctuation
+          .replace(/\s+/g, ' ') // Clean up multiple spaces
+          .trim();
+        
         setScript(generatedScript);
         setSuccess('Script generated successfully! Review and edit if needed.');
       } else {
@@ -337,28 +358,48 @@ Return only the script text, no additional formatting.`;
     }
   };
 
-  // Generate captions from script
+  // FIXED: Improved caption generation with better word-level synchronization
   const generateCaptions = (script: string, audioDuration: number): CaptionSegment[] => {
     if (!captionsEnabled || !script.trim()) return [];
 
-    // Split script into sentences
-    const sentences = script.split(/[.!?]+/).filter(s => s.trim().length > 0);
+    // Clean and split script into words
+    const words = script.trim().split(/\s+/);
     const captions: CaptionSegment[] = [];
     
-    // Distribute sentences evenly across audio duration
-    const timePerSentence = audioDuration / sentences.length;
+    // Calculate timing: assume average speaking rate of 150 words per minute
+    const wordsPerSecond = 150 / 60; // ~2.5 words per second
+    const actualWordsPerSecond = words.length / audioDuration;
+    const timePerWord = 1 / Math.max(actualWordsPerSecond, wordsPerSecond);
     
-    sentences.forEach((sentence, index) => {
-      const start = index * timePerSentence;
-      const end = Math.min((index + 1) * timePerSentence, audioDuration);
+    // Group words into caption segments (3-5 words per caption for better readability)
+    const wordsPerCaption = 4;
+    let currentTime = 0;
+    
+    for (let i = 0; i < words.length; i += wordsPerCaption) {
+      const captionWords = words.slice(i, i + wordsPerCaption);
+      const captionDuration = captionWords.length * timePerWord;
+      
+      // Ensure we don't exceed audio duration
+      const endTime = Math.min(currentTime + captionDuration, audioDuration);
       
       captions.push({
-        start: Math.round(start * 10) / 10,
-        end: Math.round(end * 10) / 10,
-        text: sentence.trim()
+        start: Math.round(currentTime * 10) / 10,
+        end: Math.round(endTime * 10) / 10,
+        text: captionWords.join(' ')
       });
-    });
+      
+      currentTime = endTime;
+      
+      // Break if we've reached the end of audio
+      if (currentTime >= audioDuration) break;
+    }
 
+    // Ensure the last caption ends with the audio
+    if (captions.length > 0) {
+      captions[captions.length - 1].end = audioDuration;
+    }
+
+    console.log('Generated captions:', captions);
     return captions;
   };
 
@@ -443,10 +484,10 @@ Return only the script text, no additional formatting.`;
         audio.load();
       });
 
-      setCreationStep('Generating captions...');
+      setCreationStep('Generating synchronized captions...');
       setCreationProgress(50);
 
-      // Generate captions
+      // FIXED: Generate better synchronized captions
       const captions = generateCaptions(script, audioDuration);
 
       setCreationStep('Creating composite video...');
@@ -535,7 +576,7 @@ Return only the script text, no additional formatting.`;
         ctx.arc(avatarX + avatarSize/2, avatarY + avatarSize/2, avatarSize/2, 0, 2 * Math.PI);
         ctx.stroke();
 
-        // FIXED: Draw captions with proper background
+        // FIXED: Draw synchronized captions with proper background
         if (captionsEnabled) {
           const currentTimeSeconds = progress * audioDuration;
           const currentCaption = captions.find(cap => 
@@ -546,16 +587,16 @@ Return only the script text, no additional formatting.`;
             ctx.font = `${captionStyle.fontWeight} ${captionStyle.fontSize}px Arial`;
             ctx.textAlign = 'center';
 
-            // Split text into words for better wrapping
+            // FIXED: Better text wrapping - split by words, not arbitrary character count
             const words = currentCaption.text.split(' ');
-            const wordsPerLine = 4;
+            const maxWordsPerLine = 3; // Fewer words per line for better readability
             const textLines = [];
             
-            for (let i = 0; i < words.length; i += wordsPerLine) {
-              textLines.push(words.slice(i, i + wordsPerLine).join(' '));
+            for (let i = 0; i < words.length; i += maxWordsPerLine) {
+              textLines.push(words.slice(i, i + maxWordsPerLine).join(' '));
             }
 
-            const lineHeight = captionStyle.fontSize + 8;
+            const lineHeight = captionStyle.fontSize + 10;
             const totalHeight = textLines.length * lineHeight;
             const startY = height - 150 - totalHeight;
 
@@ -565,16 +606,19 @@ Return only the script text, no additional formatting.`;
               // FIXED: Measure text width for proper background sizing
               const textMetrics = ctx.measureText(line);
               const textWidth = textMetrics.width;
-              const padding = 15;
+              const padding = 20;
               
-              // Draw background rectangle with proper sizing
+              // Draw background rectangle with proper sizing and rounded corners
               ctx.fillStyle = captionStyle.backgroundColor;
-              ctx.fillRect(
+              ctx.beginPath();
+              ctx.roundRect(
                 width/2 - textWidth/2 - padding, 
-                y - captionStyle.fontSize - 5, 
+                y - captionStyle.fontSize - 8, 
                 textWidth + (padding * 2), 
-                captionStyle.fontSize + 15
+                captionStyle.fontSize + 20,
+                8 // Rounded corners
               );
+              ctx.fill();
               
               // Draw text
               ctx.fillStyle = captionStyle.color;
@@ -637,7 +681,7 @@ Return only the script text, no additional formatting.`;
       setSuccess(`🎬 FullClip video created successfully! 
       
 ✅ Audio narration included
-✅ Captions synchronized  
+✅ Captions synchronized (${captions.length} segments)
 ✅ Avatar positioned ${avatarPosition}
 ${thumbnailFile ? '✅ Thumbnail intro (1 second)' : ''}
 ✅ Saved to FullClip Gallery
@@ -852,9 +896,12 @@ Your professional social media video is ready to download and share!`);
                   <textarea
                     value={script}
                     onChange={(e) => setScript(e.target.value)}
-                    placeholder="AI will generate a script based on your code..."
+                    placeholder="AI will generate a voice-friendly script based on your code..."
                     className="w-full p-3 bg-black border-2 border-white text-white rounded h-32 resize-none"
                   />
+                  <p className="text-gray-400 text-sm mt-1">
+                    💡 Script is optimized for voice synthesis - no symbols or special characters
+                  </p>
                 </div>
 
                 {/* Audio Generation */}
@@ -1060,7 +1107,7 @@ Your professional social media video is ready to download and share!`);
                       className="w-5 h-5"
                     />
                     <label htmlFor="captions-enabled" className="text-white font-bold">
-                      Enable Captions
+                      Enable Synchronized Captions
                     </label>
                   </div>
 
@@ -1096,6 +1143,9 @@ Your professional social media video is ready to download and share!`);
                           className="w-full h-10 rounded border-2 border-white"
                         />
                       </div>
+                      <p className="text-gray-400 text-sm">
+                        💡 Captions are automatically synchronized with the audio timing
+                      </p>
                     </div>
                   )}
                 </div>
