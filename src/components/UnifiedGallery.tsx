@@ -190,34 +190,37 @@ const UnifiedGallery: React.FC<UnifiedGalleryProps> = ({
         throw new Error('Invalid video blob - size is 0');
       }
 
-      // FIXED: Use the custom filename properly with proper validation
+      // FIXED: Properly handle custom filename for display
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const cleanFilename = customFilename.trim() || pendingVideo.originalFilename.replace(/\.[^/.]+$/, '');
-      const finalFilename = `${cleanFilename}-${timestamp}.mp4`;
+      const cleanCustomName = customFilename.trim();
+      const displayName = cleanCustomName || pendingVideo.originalFilename.replace(/\.[^/.]+$/, '');
+      const technicalFilename = `${displayName}-${timestamp}.mp4`;
 
-      console.log('Saving video with custom filename:', {
-        customFilename: customFilename.trim(),
-        cleanFilename,
-        finalFilename
+      console.log('Saving video with proper naming:', {
+        customFilename: cleanCustomName,
+        displayName,
+        technicalFilename,
+        originalFilename: pendingVideo.originalFilename
       });
 
       const videoId = await dbManager.saveVideo(
-        finalFilename, // This is the actual filename that gets stored
-        pendingVideo.originalFilename, // This is the original file reference
+        technicalFilename, // Technical filename for download
+        pendingVideo.originalFilename, // Original file reference
         pendingVideo.language,
         pendingVideo.duration,
         pendingVideo.blob,
-        pendingVideo.content
+        pendingVideo.content,
+        displayName // FIXED: This is what shows in the gallery
       );
       
-      console.log('Video saved successfully with ID:', videoId, 'and filename:', finalFilename);
+      console.log('Video saved successfully with ID:', videoId, 'display name:', displayName);
       
       await loadAllData();
       onPendingVideoSaved?.();
       
-      // FIXED: Show custom success modal
+      // Show custom success modal with the display name
       setSuccessModalData({
-        filename: finalFilename,
+        filename: displayName, // Show the user-friendly name in success modal
         type: 'video'
       });
       setShowSuccessModal(true);
@@ -243,6 +246,7 @@ const UnifiedGallery: React.FC<UnifiedGalleryProps> = ({
       const a = document.createElement('a');
       a.href = url;
       
+      // Use the technical filename for download (which includes timestamp)
       let filename = video.filename;
       if (!filename.toLowerCase().endsWith('.mp4')) {
         filename = filename.replace(/\.[^/.]+$/, '') + '.mp4';
@@ -358,6 +362,12 @@ const UnifiedGallery: React.FC<UnifiedGalleryProps> = ({
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
+  // FIXED: Helper function to get display name for videos
+  const getDisplayName = (video: VideoRecord | FullClipVideoRecord | ShortsVideoRecord): string => {
+    // Use display_name if available, otherwise fall back to original_filename
+    return video.display_name || video.original_filename;
+  };
+
   const renderVideoList = () => {
     let currentVideos: (VideoRecord | FullClipVideoRecord | ShortsVideoRecord)[] = [];
     let emptyMessage = '';
@@ -421,7 +431,8 @@ const UnifiedGallery: React.FC<UnifiedGalleryProps> = ({
             )}
 
             <div className="flex items-start justify-between mb-3">
-              <h4 className="font-bold text-lg truncate">{video.original_filename}</h4>
+              {/* FIXED: Show display name instead of original filename */}
+              <h4 className="font-bold text-lg truncate">{getDisplayName(video)}</h4>
               <div className="flex gap-2 ml-4">
                 {/* Tab-specific action buttons */}
                 {activeTab === 'videos' && (
@@ -594,7 +605,8 @@ const UnifiedGallery: React.FC<UnifiedGalleryProps> = ({
         </div>
         
         <div className="mt-6 text-center">
-          <h4 className="font-bold text-xl text-white mb-3">{selectedVideo.original_filename}</h4>
+          {/* FIXED: Show display name in video player too */}
+          <h4 className="font-bold text-xl text-white mb-3">{getDisplayName(selectedVideo)}</h4>
           <div className="flex justify-center gap-6 text-lg text-gray-400 font-medium mb-4">
             <span className="capitalize">{selectedVideo.file_language}</span>
             <span>{formatDuration(selectedVideo.duration)}</span>
@@ -802,14 +814,14 @@ const UnifiedGallery: React.FC<UnifiedGalleryProps> = ({
                     
                     {/* File Rename Section */}
                     <div className="mb-4">
-                      <label className="block text-white font-bold mb-2">Filename</label>
+                      <label className="block text-white font-bold mb-2">Video Name</label>
                       <div className="flex gap-2">
                         <input
                           type="text"
                           value={customFilename}
                           onChange={(e) => setCustomFilename(e.target.value)}
-                          placeholder="Enter filename (without extension)"
-                          className="flex-1 p-3 bg-black border-2 border-white text-white rounded font-mono"
+                          placeholder="Enter a name for your video"
+                          className="flex-1 p-3 bg-black border-2 border-white text-white rounded"
                           disabled={savingPending}
                         />
                         <button
@@ -821,11 +833,11 @@ const UnifiedGallery: React.FC<UnifiedGalleryProps> = ({
                         </button>
                       </div>
                       <p className="text-gray-400 text-sm mt-1">
-                        Final filename: {customFilename || 'untitled'}-[timestamp].mp4
+                        This name will appear in your gallery
                       </p>
                     </div>
                     
-                    <p className="text-lg text-white font-medium">{pendingVideo.originalFilename}</p>
+                    <p className="text-lg text-white font-medium">Original: {pendingVideo.originalFilename}</p>
                     <div className="flex items-center gap-6 text-sm text-gray-400 font-medium mt-2">
                       <span>{formatDuration(pendingVideo.duration)}</span>
                       <span>{formatFileSize(pendingVideo.blob.size)}</span>

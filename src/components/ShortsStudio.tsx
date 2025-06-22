@@ -309,7 +309,7 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
       ctx.shadowOffsetX = 3;
       ctx.shadowOffsetY = 3;
       ctx.fillStyle = 'white';
-      ctx.fillText(line, canvasWidth / 2, lineY);
+      ctx.fillText(line, canvasWidth /2, lineY);
       
       // Reset shadow
       ctx.shadowColor = 'transparent';
@@ -454,13 +454,15 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
         
         setProcessingProgress('Saving to gallery...');
         
-        // Save to Shorts gallery
+        // FIXED: Generate display name from original video's display name
+        const originalDisplayName = selectedVideo.display_name || selectedVideo.original_filename.replace(/\.[^/.]+$/, '');
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const filename = `shorts-${selectedVideo.original_filename.replace(/\.[^/.]+$/, '')}-${timestamp}.mp4`;
+        const technicalFilename = `shorts-${originalDisplayName}-${timestamp}.mp4`;
+        const displayName = `${originalDisplayName} (Shorts)`;
         
         try {
           const videoId = await dbManager.saveShortsVideo(
-            filename,
+            technicalFilename,
             selectedVideo.original_filename,
             selectedVideo.file_language,
             Math.round(video.duration),
@@ -468,15 +470,16 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
             selectedAvatar.name,
             avatarPosition,
             avatarSize,
-            selectedVideo.original_file_content
+            selectedVideo.original_file_content,
+            displayName // FIXED: Pass the display name
           );
 
-          console.log('Shorts video with audio saved successfully with ID:', videoId);
+          console.log('Shorts video with audio saved successfully with ID:', videoId, 'display name:', displayName);
           
           onShortsVideoSaved();
           
           // Show custom success modal instead of alert
-          setSavedVideoFilename(filename);
+          setSavedVideoFilename(displayName); // Show display name in success modal
           setShowSuccessModal(true);
           
         } catch (saveError) {
@@ -617,7 +620,7 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
               </h2>
               {selectedVideo && (
                 <div className="text-lg text-gray-400 font-medium">
-                  {selectedVideo.original_filename} • {selectedVideo.duration}s • With Audio & Captions
+                  {selectedVideo.display_name || selectedVideo.original_filename} • {selectedVideo.duration}s • With Audio & Captions
                 </div>
               )}
             </div>

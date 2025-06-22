@@ -9,6 +9,7 @@ export interface VideoRecord {
   created_at: string;
   video_blob: Uint8Array;
   original_file_content: string;
+  display_name?: string; // NEW: For custom user-friendly names
 }
 
 export interface FullClipVideoRecord {
@@ -22,6 +23,7 @@ export interface FullClipVideoRecord {
   script: string;
   captions: string; // JSON string of caption segments
   original_file_content: string;
+  display_name?: string; // NEW: For custom user-friendly names
 }
 
 export interface ShortsVideoRecord {
@@ -36,6 +38,7 @@ export interface ShortsVideoRecord {
   avatar_position: string;
   avatar_size: number;
   original_file_content: string;
+  display_name?: string; // NEW: For custom user-friendly names
 }
 
 class DatabaseManager {
@@ -86,8 +89,10 @@ class DatabaseManager {
 
   private createTables() {
     try {
-      // Check if original_file_content column exists in videos table
+      // Check if display_name column exists in videos table
       const videosTableInfo = this.db.exec("PRAGMA table_info(videos)");
+      const hasDisplayNameColumn = videosTableInfo.length > 0 && 
+        videosTableInfo[0].values.some((row: any[]) => row[1] === 'display_name');
       const hasFileContentColumn = videosTableInfo.length > 0 && 
         videosTableInfo[0].values.some((row: any[]) => row[1] === 'original_file_content');
 
@@ -101,27 +106,38 @@ class DatabaseManager {
           duration INTEGER NOT NULL,
           created_at TEXT NOT NULL,
           video_blob BLOB NOT NULL,
-          original_file_content TEXT
+          original_file_content TEXT,
+          display_name TEXT
         );
       `;
 
-      // Add column if it doesn't exist
+      // Add columns if they don't exist
       if (!hasFileContentColumn) {
         try {
           this.db.run('ALTER TABLE videos ADD COLUMN original_file_content TEXT');
           console.log('Added original_file_content column to videos table');
         } catch (error) {
-          // Column might already exist or table doesn't exist yet
           console.log('Creating videos table with original_file_content column');
         }
       }
 
-      // Check if original_file_content column exists in fullclip_videos table
+      if (!hasDisplayNameColumn) {
+        try {
+          this.db.run('ALTER TABLE videos ADD COLUMN display_name TEXT');
+          console.log('Added display_name column to videos table');
+        } catch (error) {
+          console.log('Creating videos table with display_name column');
+        }
+      }
+
+      // Check columns for fullclip_videos table
       const fullclipTableInfo = this.db.exec("PRAGMA table_info(fullclip_videos)");
       const hasFullclipFileContentColumn = fullclipTableInfo.length > 0 && 
         fullclipTableInfo[0].values.some((row: any[]) => row[1] === 'original_file_content');
+      const hasFullclipDisplayNameColumn = fullclipTableInfo.length > 0 && 
+        fullclipTableInfo[0].values.some((row: any[]) => row[1] === 'display_name');
 
-      // New FullClip videos table for videos with audio and captions
+      // FullClip videos table
       const createFullClipVideosTableSQL = `
         CREATE TABLE IF NOT EXISTS fullclip_videos (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -133,22 +149,35 @@ class DatabaseManager {
           video_blob BLOB NOT NULL,
           script TEXT,
           captions TEXT,
-          original_file_content TEXT
+          original_file_content TEXT,
+          display_name TEXT
         );
       `;
 
-      // Add column if it doesn't exist
       if (!hasFullclipFileContentColumn) {
         try {
           this.db.run('ALTER TABLE fullclip_videos ADD COLUMN original_file_content TEXT');
           console.log('Added original_file_content column to fullclip_videos table');
         } catch (error) {
-          // Column might already exist or table doesn't exist yet
           console.log('Creating fullclip_videos table with original_file_content column');
         }
       }
 
-      // New Shorts videos table for videos with avatars
+      if (!hasFullclipDisplayNameColumn) {
+        try {
+          this.db.run('ALTER TABLE fullclip_videos ADD COLUMN display_name TEXT');
+          console.log('Added display_name column to fullclip_videos table');
+        } catch (error) {
+          console.log('Creating fullclip_videos table with display_name column');
+        }
+      }
+
+      // Check columns for shorts_videos table
+      const shortsTableInfo = this.db.exec("PRAGMA table_info(shorts_videos)");
+      const hasShortsDisplayNameColumn = shortsTableInfo.length > 0 && 
+        shortsTableInfo[0].values.some((row: any[]) => row[1] === 'display_name');
+
+      // Shorts videos table
       const createShortsVideosTableSQL = `
         CREATE TABLE IF NOT EXISTS shorts_videos (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -161,9 +190,19 @@ class DatabaseManager {
           avatar_type TEXT NOT NULL,
           avatar_position TEXT NOT NULL,
           avatar_size INTEGER NOT NULL,
-          original_file_content TEXT
+          original_file_content TEXT,
+          display_name TEXT
         );
       `;
+
+      if (!hasShortsDisplayNameColumn) {
+        try {
+          this.db.run('ALTER TABLE shorts_videos ADD COLUMN display_name TEXT');
+          console.log('Added display_name column to shorts_videos table');
+        } catch (error) {
+          console.log('Creating shorts_videos table with display_name column');
+        }
+      }
 
       this.db.run(createVideosTableSQL);
       this.db.run(createFullClipVideosTableSQL);
@@ -235,18 +274,19 @@ class DatabaseManager {
     }
   }
 
-  // Original video methods
+  // FIXED: Updated saveVideo method to include display_name
   async saveVideo(
     filename: string,
     originalFilename: string,
     language: string,
     duration: number,
     videoBlob: Blob,
-    originalFileContent: string = ''
+    originalFileContent: string = '',
+    displayName: string = '' // NEW: Custom display name
   ): Promise<number> {
     try {
       await this.initialize();
-      console.log('Saving video:', { filename, originalFilename, language, duration, blobSize: videoBlob.size });
+      console.log('Saving video:', { filename, originalFilename, language, duration, blobSize: videoBlob.size, displayName });
 
       const arrayBuffer = await videoBlob.arrayBuffer();
       const uint8Array = new Uint8Array(arrayBuffer);
@@ -255,11 +295,11 @@ class DatabaseManager {
       console.log('Video blob converted to Uint8Array, size:', uint8Array.length);
 
       const stmt = this.db.prepare(`
-        INSERT INTO videos (filename, original_filename, file_language, duration, created_at, video_blob, original_file_content)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO videos (filename, original_filename, file_language, duration, created_at, video_blob, original_file_content, display_name)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
-      stmt.run([filename, originalFilename, language, duration, createdAt, uint8Array, originalFileContent]);
+      stmt.run([filename, originalFilename, language, duration, createdAt, uint8Array, originalFileContent, displayName]);
       
       // Get the inserted ID
       const result = this.db.exec("SELECT last_insert_rowid()");
@@ -268,7 +308,7 @@ class DatabaseManager {
       stmt.free();
       await this.saveDatabase();
 
-      console.log('Video saved successfully with ID:', videoId);
+      console.log('Video saved successfully with ID:', videoId, 'and display name:', displayName);
       return videoId;
     } catch (error) {
       console.error('Failed to save video:', error);
@@ -282,7 +322,7 @@ class DatabaseManager {
       console.log('Loading all videos...');
 
       const result = this.db.exec(`
-        SELECT id, filename, original_filename, file_language, duration, created_at, video_blob, original_file_content
+        SELECT id, filename, original_filename, file_language, duration, created_at, video_blob, original_file_content, display_name
         FROM videos
         ORDER BY created_at DESC
       `);
@@ -293,7 +333,6 @@ class DatabaseManager {
       }
 
       const videos: VideoRecord[] = [];
-      const columns = result[0].columns;
       const values = result[0].values;
 
       for (const row of values) {
@@ -305,7 +344,8 @@ class DatabaseManager {
           duration: row[4] as number,
           created_at: row[5] as string,
           video_blob: row[6] as Uint8Array,
-          original_file_content: (row[7] as string) || ''
+          original_file_content: (row[7] as string) || '',
+          display_name: (row[8] as string) || ''
         };
         videos.push(video);
       }
@@ -323,7 +363,7 @@ class DatabaseManager {
       await this.initialize();
 
       const result = this.db.exec(`
-        SELECT id, filename, original_filename, file_language, duration, created_at, video_blob, original_file_content
+        SELECT id, filename, original_filename, file_language, duration, created_at, video_blob, original_file_content, display_name
         FROM videos
         WHERE id = ?
       `, [id]);
@@ -341,7 +381,8 @@ class DatabaseManager {
         duration: row[4] as number,
         created_at: row[5] as string,
         video_blob: row[6] as Uint8Array,
-        original_file_content: (row[7] as string) || ''
+        original_file_content: (row[7] as string) || '',
+        display_name: (row[8] as string) || ''
       };
 
       return video;
@@ -369,7 +410,7 @@ class DatabaseManager {
     }
   }
 
-  // FullClip video methods (videos with audio and captions)
+  // FIXED: Updated saveFullClipVideo method to include display_name
   async saveFullClipVideo(
     filename: string,
     originalFilename: string,
@@ -378,11 +419,12 @@ class DatabaseManager {
     videoBlob: Blob,
     script: string,
     captions: any[],
-    originalFileContent: string = ''
+    originalFileContent: string = '',
+    displayName: string = '' // NEW: Custom display name
   ): Promise<number> {
     try {
       await this.initialize();
-      console.log('Saving FullClip video:', { filename, originalFilename, language, duration, blobSize: videoBlob.size });
+      console.log('Saving FullClip video:', { filename, originalFilename, language, duration, blobSize: videoBlob.size, displayName });
 
       const arrayBuffer = await videoBlob.arrayBuffer();
       const uint8Array = new Uint8Array(arrayBuffer);
@@ -392,11 +434,11 @@ class DatabaseManager {
       console.log('FullClip video blob converted to Uint8Array, size:', uint8Array.length);
 
       const stmt = this.db.prepare(`
-        INSERT INTO fullclip_videos (filename, original_filename, file_language, duration, created_at, video_blob, script, captions, original_file_content)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO fullclip_videos (filename, original_filename, file_language, duration, created_at, video_blob, script, captions, original_file_content, display_name)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
-      stmt.run([filename, originalFilename, language, duration, createdAt, uint8Array, script, captionsJson, originalFileContent]);
+      stmt.run([filename, originalFilename, language, duration, createdAt, uint8Array, script, captionsJson, originalFileContent, displayName]);
       
       // Get the inserted ID
       const result = this.db.exec("SELECT last_insert_rowid()");
@@ -405,7 +447,7 @@ class DatabaseManager {
       stmt.free();
       await this.saveDatabase();
 
-      console.log('FullClip video saved successfully with ID:', videoId);
+      console.log('FullClip video saved successfully with ID:', videoId, 'and display name:', displayName);
       return videoId;
     } catch (error) {
       console.error('Failed to save FullClip video:', error);
@@ -419,7 +461,7 @@ class DatabaseManager {
       console.log('Loading all FullClip videos...');
 
       const result = this.db.exec(`
-        SELECT id, filename, original_filename, file_language, duration, created_at, video_blob, script, captions, original_file_content
+        SELECT id, filename, original_filename, file_language, duration, created_at, video_blob, script, captions, original_file_content, display_name
         FROM fullclip_videos
         ORDER BY created_at DESC
       `);
@@ -443,7 +485,8 @@ class DatabaseManager {
           video_blob: row[6] as Uint8Array,
           script: row[7] as string,
           captions: row[8] as string,
-          original_file_content: (row[9] as string) || ''
+          original_file_content: (row[9] as string) || '',
+          display_name: (row[10] as string) || ''
         };
         videos.push(video);
       }
@@ -461,7 +504,7 @@ class DatabaseManager {
       await this.initialize();
 
       const result = this.db.exec(`
-        SELECT id, filename, original_filename, file_language, duration, created_at, video_blob, script, captions, original_file_content
+        SELECT id, filename, original_filename, file_language, duration, created_at, video_blob, script, captions, original_file_content, display_name
         FROM fullclip_videos
         WHERE id = ?
       `, [id]);
@@ -481,7 +524,8 @@ class DatabaseManager {
         video_blob: row[6] as Uint8Array,
         script: row[7] as string,
         captions: row[8] as string,
-        original_file_content: (row[9] as string) || ''
+        original_file_content: (row[9] as string) || '',
+        display_name: (row[10] as string) || ''
       };
 
       return video;
@@ -509,7 +553,7 @@ class DatabaseManager {
     }
   }
 
-  // Shorts video methods (videos with avatars)
+  // FIXED: Updated saveShortsVideo method to include display_name
   async saveShortsVideo(
     filename: string,
     originalFilename: string,
@@ -519,11 +563,12 @@ class DatabaseManager {
     avatarType: string,
     avatarPosition: string,
     avatarSize: number,
-    originalFileContent: string = ''
+    originalFileContent: string = '',
+    displayName: string = '' // NEW: Custom display name
   ): Promise<number> {
     try {
       await this.initialize();
-      console.log('Saving Shorts video:', { filename, originalFilename, language, duration, blobSize: videoBlob.size });
+      console.log('Saving Shorts video:', { filename, originalFilename, language, duration, blobSize: videoBlob.size, displayName });
 
       const arrayBuffer = await videoBlob.arrayBuffer();
       const uint8Array = new Uint8Array(arrayBuffer);
@@ -532,11 +577,11 @@ class DatabaseManager {
       console.log('Shorts video blob converted to Uint8Array, size:', uint8Array.length);
 
       const stmt = this.db.prepare(`
-        INSERT INTO shorts_videos (filename, original_filename, file_language, duration, created_at, video_blob, avatar_type, avatar_position, avatar_size, original_file_content)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO shorts_videos (filename, original_filename, file_language, duration, created_at, video_blob, avatar_type, avatar_position, avatar_size, original_file_content, display_name)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
-      stmt.run([filename, originalFilename, language, duration, createdAt, uint8Array, avatarType, avatarPosition, avatarSize, originalFileContent]);
+      stmt.run([filename, originalFilename, language, duration, createdAt, uint8Array, avatarType, avatarPosition, avatarSize, originalFileContent, displayName]);
       
       // Get the inserted ID
       const result = this.db.exec("SELECT last_insert_rowid()");
@@ -545,7 +590,7 @@ class DatabaseManager {
       stmt.free();
       await this.saveDatabase();
 
-      console.log('Shorts video saved successfully with ID:', videoId);
+      console.log('Shorts video saved successfully with ID:', videoId, 'and display name:', displayName);
       return videoId;
     } catch (error) {
       console.error('Failed to save Shorts video:', error);
@@ -559,7 +604,7 @@ class DatabaseManager {
       console.log('Loading all Shorts videos...');
 
       const result = this.db.exec(`
-        SELECT id, filename, original_filename, file_language, duration, created_at, video_blob, avatar_type, avatar_position, avatar_size, original_file_content
+        SELECT id, filename, original_filename, file_language, duration, created_at, video_blob, avatar_type, avatar_position, avatar_size, original_file_content, display_name
         FROM shorts_videos
         ORDER BY created_at DESC
       `);
@@ -584,7 +629,8 @@ class DatabaseManager {
           avatar_type: row[7] as string,
           avatar_position: row[8] as string,
           avatar_size: row[9] as number,
-          original_file_content: (row[10] as string) || ''
+          original_file_content: (row[10] as string) || '',
+          display_name: (row[11] as string) || ''
         };
         videos.push(video);
       }
@@ -602,7 +648,7 @@ class DatabaseManager {
       await this.initialize();
 
       const result = this.db.exec(`
-        SELECT id, filename, original_filename, file_language, duration, created_at, video_blob, avatar_type, avatar_position, avatar_size, original_file_content
+        SELECT id, filename, original_filename, file_language, duration, created_at, video_blob, avatar_type, avatar_position, avatar_size, original_file_content, display_name
         FROM shorts_videos
         WHERE id = ?
       `, [id]);
@@ -623,7 +669,8 @@ class DatabaseManager {
         avatar_type: row[7] as string,
         avatar_position: row[8] as string,
         avatar_size: row[9] as number,
-        original_file_content: (row[10] as string) || ''
+        original_file_content: (row[10] as string) || '',
+        display_name: (row[11] as string) || ''
       };
 
       return video;

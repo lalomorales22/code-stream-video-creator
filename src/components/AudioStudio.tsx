@@ -560,29 +560,32 @@ Write ONLY the script text in a natural, conversational tone that fits exactly $
         
         setProcessingProgress('Saving to gallery...');
         
-        // Save to FullClip gallery
+        // FIXED: Generate display name from original video's display name or filename
+        const originalDisplayName = selectedVideo.display_name || selectedVideo.original_filename.replace(/\.[^/.]+$/, '');
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const filename = `fullclip-${selectedVideo.original_filename.replace(/\.[^/.]+$/, '')}-${timestamp}.mp4`;
+        const technicalFilename = `fullclip-${originalDisplayName}-${timestamp}.mp4`;
+        const displayName = `${originalDisplayName} (FullClip)`;
         
         try {
           const videoId = await dbManager.saveFullClipVideo(
-            filename,
+            technicalFilename,
             selectedVideo.original_filename,
             selectedVideo.file_language,
             Math.round(finalDuration),
             finalBlob,
             script,
             captions,
-            selectedVideo.original_file_content
+            selectedVideo.original_file_content,
+            displayName // FIXED: Pass the display name
           );
 
-          console.log('FullClip video saved successfully with ID:', videoId);
+          console.log('FullClip video saved successfully with ID:', videoId, 'display name:', displayName);
           
           // Notify parent component
           onAudioVideoSaved();
           
           // FIXED: Show custom success modal instead of alert
-          setSavedVideoFilename(filename);
+          setSavedVideoFilename(displayName); // Show display name in success modal
           setShowSuccessModal(true);
           
         } catch (saveError) {
@@ -763,7 +766,7 @@ Write ONLY the script text in a natural, conversational tone that fits exactly $
               </h2>
               {selectedVideo && (
                 <div className="text-lg text-gray-400 font-medium">
-                  {selectedVideo.original_filename} • {selectedVideo.duration}s
+                  {selectedVideo.display_name || selectedVideo.original_filename} • {selectedVideo.duration}s
                 </div>
               )}
             </div>
