@@ -37,24 +37,7 @@ interface CaptionSegment {
   text: string;
   startTime: number;
   endTime: number;
-  style: {
-    fontSize: number;
-    fontWeight: string;
-    color: string;
-    backgroundColor: string;
-    position: 'bottom' | 'top' | 'center';
-    alignment: 'left' | 'center' | 'right';
-  };
 }
-
-const defaultCaptionStyle = {
-  fontSize: 24,
-  fontWeight: 'bold',
-  color: '#FFFFFF',
-  backgroundColor: 'rgba(0, 0, 0, 0.8)',
-  position: 'bottom' as const,
-  alignment: 'center' as const
-};
 
 const AudioStudio: React.FC<AudioStudioProps> = ({
   isOpen,
@@ -75,8 +58,11 @@ const AudioStudio: React.FC<AudioStudioProps> = ({
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isProcessingVideo, setIsProcessingVideo] = useState(false);
-  const [showCaptionEditor, setShowCaptionEditor] = useState(false);
-  const [selectedCaption, setSelectedCaption] = useState<CaptionSegment | null>(null);
+  
+  // Simplified caption controls
+  const [captionsEnabled, setCaptionsEnabled] = useState(true);
+  const [captionTextColor, setCaptionTextColor] = useState('#FFFFFF');
+  const [captionBackgroundColor, setCaptionBackgroundColor] = useState('#000000');
   
   const audioRef = useRef<HTMLAudioElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -270,8 +256,7 @@ Let's begin our journey through this fascinating piece of ${language} code!`;
       id: `caption-${index}`,
       text: sentence.trim(),
       startTime: index * timePerSentence,
-      endTime: (index + 1) * timePerSentence,
-      style: { ...defaultCaptionStyle }
+      endTime: (index + 1) * timePerSentence
     }));
 
     setCaptions(captionSegments);
@@ -287,34 +272,6 @@ Let's begin our journey through this fascinating piece of ${language} code!`;
     } else {
       audio.play();
       setIsPlayingAudio(true);
-    }
-  };
-
-  const addCaption = () => {
-    const newCaption: CaptionSegment = {
-      id: `caption-${Date.now()}`,
-      text: 'New caption',
-      startTime: currentTime,
-      endTime: currentTime + 3,
-      style: { ...defaultCaptionStyle }
-    };
-
-    setCaptions(prev => [...prev, newCaption].sort((a, b) => a.startTime - b.startTime));
-    setSelectedCaption(newCaption);
-    setShowCaptionEditor(true);
-  };
-
-  const updateCaption = (captionId: string, updates: Partial<CaptionSegment>) => {
-    setCaptions(prev => prev.map(caption => 
-      caption.id === captionId ? { ...caption, ...updates } : caption
-    ));
-  };
-
-  const deleteCaption = (captionId: string) => {
-    setCaptions(prev => prev.filter(caption => caption.id !== captionId));
-    if (selectedCaption?.id === captionId) {
-      setSelectedCaption(null);
-      setShowCaptionEditor(false);
     }
   };
 
@@ -352,25 +309,27 @@ Let's begin our journey through this fascinating piece of ${language} code!`;
         audio.onloadedmetadata = resolve;
       });
 
-      // Set up MediaRecorder for final video
+      // Set up MediaRecorder for final video with H.264 codec
       const stream = canvas.captureStream(30);
       
-      // Add audio track to the stream
+      // Create audio context and connect audio
       const audioContext = new AudioContext();
       const audioSource = audioContext.createMediaElementSource(audio);
       const destination = audioContext.createMediaStreamDestination();
       audioSource.connect(destination);
+      audioSource.connect(audioContext.destination); // Also connect to speakers for monitoring
       
-      // Combine video and audio streams
+      // Add audio track to the stream
       const audioTrack = destination.stream.getAudioTracks()[0];
       if (audioTrack) {
         stream.addTrack(audioTrack);
       }
 
+      // Use H.264 codec for better compatibility
       const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'video/webm;codecs=vp9,opus',
-        videoBitsPerSecond: 8000000,
-        audioBitsPerSecorder: 128000
+        mimeType: 'video/mp4;codecs=h264,aac',
+        videoBitsPerSecond: 5000000, // 5 Mbps for good quality
+        audioBitsPerSecond: 128000   // 128 kbps audio
       });
 
       const chunks: Blob[] = [];
@@ -398,7 +357,10 @@ Let's begin our journey through this fascinating piece of ${language} code!`;
         );
 
         onAudioVideoSaved();
+        
+        // Close the studio and show success
         onClose();
+        alert('FullClip video saved successfully! Check the FullClip Gallery to view it.');
         
         // Cleanup
         URL.revokeObjectURL(videoUrl);
@@ -434,52 +396,46 @@ Let's begin our journey through this fascinating piece of ${language} code!`;
         // Draw video frame
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-        // Draw captions
-        const currentCaptions = captions.filter(caption => 
-          elapsed / 1000 >= caption.startTime && elapsed / 1000 <= caption.endTime
-        );
+        // Draw captions if enabled
+        if (captionsEnabled) {
+          const currentCaptions = captions.filter(caption => 
+            elapsed / 1000 >= caption.startTime && elapsed / 1000 <= caption.endTime
+          );
 
-        currentCaptions.forEach(caption => {
-          const style = caption.style;
-          ctx.font = `${style.fontWeight} ${style.fontSize}px Arial`;
-          ctx.fillStyle = style.backgroundColor;
-          ctx.textAlign = style.alignment as CanvasTextAlign;
+          currentCaptions.forEach(caption => {
+            // Set up caption styling
+            ctx.font = 'bold 24px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'bottom';
 
-          const lines = caption.text.split('\n');
-          const lineHeight = style.fontSize * 1.2;
-          const totalHeight = lines.length * lineHeight;
-          
-          let y: number;
-          switch (style.position) {
-            case 'top':
-              y = 50;
-              break;
-            case 'center':
-              y = (canvas.height - totalHeight) / 2;
-              break;
-            case 'bottom':
-            default:
-              y = canvas.height - totalHeight - 50;
-              break;
-          }
+            const lines = caption.text.split('\n');
+            const lineHeight = 30;
+            const totalHeight = lines.length * lineHeight;
+            const startY = canvas.height - 100; // Position at bottom
 
-          lines.forEach((line, index) => {
-            const lineY = y + (index * lineHeight);
-            const x = style.alignment === 'center' ? canvas.width / 2 : 
-                     style.alignment === 'right' ? canvas.width - 50 : 50;
+            lines.forEach((line, index) => {
+              const y = startY - (lines.length - 1 - index) * lineHeight;
+              const x = canvas.width / 2;
 
-            // Draw background
-            const textWidth = ctx.measureText(line).width;
-            const bgX = style.alignment === 'center' ? x - textWidth / 2 - 10 :
-                       style.alignment === 'right' ? x - textWidth - 10 : x - 10;
-            
-            ctx.fillRect(bgX, lineY - style.fontSize, textWidth + 20, lineHeight);
+              // Measure text for background
+              const textWidth = ctx.measureText(line).width;
+              const padding = 20;
 
-            // Draw text
-            ctx.fillStyle = style.color;
-            ctx.fillText(line, x, lineY);
+              // Draw background
+              ctx.fillStyle = captionBackgroundColor + 'CC'; // Add transparency
+              ctx.fillRect(
+                x - textWidth / 2 - padding,
+                y - 24 - 5,
+                textWidth + padding * 2,
+                lineHeight
+              );
+
+              // Draw text
+              ctx.fillStyle = captionTextColor;
+              ctx.fillText(line, x, y);
+            });
           });
-        });
+        }
 
         requestAnimationFrame(renderFrame);
       };
@@ -641,15 +597,44 @@ Let's begin our journey through this fascinating piece of ${language} code!`;
           {/* Right Panel - Captions & Preview */}
           <div className="w-1/2 flex flex-col">
             <div className="p-6 border-b-2 border-white">
-              <div className="flex items-center justify-between">
-                <h3 className="text-2xl font-bold text-white">Captions & Preview</h3>
-                <button
-                  onClick={addCaption}
-                  className="flex items-center gap-2 bg-white hover:bg-gray-200 text-black px-3 py-2 rounded font-bold transition-colors border-2 border-white"
-                >
-                  <Captions className="w-4 h-4" />
-                  Add Caption
-                </button>
+              <h3 className="text-2xl font-bold text-white mb-4">Captions & Preview</h3>
+              
+              {/* Simplified Caption Controls */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-4">
+                  <label className="flex items-center gap-2 text-white font-bold">
+                    <input
+                      type="checkbox"
+                      checked={captionsEnabled}
+                      onChange={(e) => setCaptionsEnabled(e.target.checked)}
+                      className="w-5 h-5"
+                    />
+                    Enable Captions
+                  </label>
+                </div>
+                
+                {captionsEnabled && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-white font-bold mb-2">Text Color</label>
+                      <input
+                        type="color"
+                        value={captionTextColor}
+                        onChange={(e) => setCaptionTextColor(e.target.value)}
+                        className="w-full h-10 bg-black border-2 border-white rounded cursor-pointer"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-white font-bold mb-2">Background Color</label>
+                      <input
+                        type="color"
+                        value={captionBackgroundColor}
+                        onChange={(e) => setCaptionBackgroundColor(e.target.value)}
+                        className="w-full h-10 bg-black border-2 border-white rounded cursor-pointer"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -668,40 +653,28 @@ Let's begin our journey through this fascinating piece of ${language} code!`;
                 </div>
               )}
 
-              {/* Captions List */}
-              <div className="space-y-3">
-                <h4 className="text-white font-bold">Caption Timeline</h4>
-                {captions.length === 0 ? (
-                  <p className="text-gray-400">No captions added yet. Generate audio to create automatic captions.</p>
-                ) : (
-                  captions.map(caption => (
-                    <div
-                      key={caption.id}
-                      className="bg-black border-2 border-white rounded p-4 cursor-pointer hover:bg-gray-900 transition-colors"
-                      onClick={() => {
-                        setSelectedCaption(caption);
-                        setShowCaptionEditor(true);
-                      }}
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-white font-bold text-sm">
-                          {formatTime(caption.startTime)} - {formatTime(caption.endTime)}
-                        </span>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            deleteCaption(caption.id);
-                          }}
-                          className="text-red-400 hover:text-red-300 p-1"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
+              {/* Caption Preview */}
+              {captionsEnabled && captions.length > 0 && (
+                <div className="mb-6">
+                  <h4 className="text-white font-bold mb-3">Caption Preview</h4>
+                  <div 
+                    className="p-4 rounded border-2 border-white relative"
+                    style={{ backgroundColor: '#1a1a1a', minHeight: '100px' }}
+                  >
+                    <div className="absolute bottom-4 left-4 right-4">
+                      <div 
+                        className="p-2 rounded text-center"
+                        style={{ 
+                          backgroundColor: captionBackgroundColor + 'CC',
+                          color: captionTextColor 
+                        }}
+                      >
+                        Sample caption text will appear here
                       </div>
-                      <p className="text-gray-300 text-sm">{caption.text}</p>
                     </div>
-                  ))
-                )}
-              </div>
+                  </div>
+                </div>
+              )}
 
               {/* Final Processing */}
               <div className="mt-8">
@@ -725,126 +698,6 @@ Let's begin our journey through this fascinating piece of ${language} code!`;
         {/* Hidden canvas for video processing */}
         <canvas ref={canvasRef} className="hidden" />
       </div>
-
-      {/* Caption Editor Modal */}
-      {showCaptionEditor && selectedCaption && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-60 flex items-center justify-center p-6">
-          <div className="bg-black border-2 border-white rounded-xl p-6 max-w-2xl w-full">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-2xl font-bold text-white">Edit Caption</h3>
-              <button
-                onClick={() => setShowCaptionEditor(false)}
-                className="p-2 hover:bg-white hover:text-black rounded transition-colors border-2 border-white text-white"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              {/* Caption Text */}
-              <div>
-                <label className="block text-white font-bold mb-2">Caption Text</label>
-                <textarea
-                  value={selectedCaption.text}
-                  onChange={(e) => updateCaption(selectedCaption.id, { text: e.target.value })}
-                  className="w-full h-20 p-3 bg-black border-2 border-white text-white rounded resize-none"
-                />
-              </div>
-
-              {/* Timing */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-white font-bold mb-2">Start Time (seconds)</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={selectedCaption.startTime}
-                    onChange={(e) => updateCaption(selectedCaption.id, { startTime: parseFloat(e.target.value) })}
-                    className="w-full p-3 bg-black border-2 border-white text-white rounded"
-                  />
-                </div>
-                <div>
-                  <label className="block text-white font-bold mb-2">End Time (seconds)</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={selectedCaption.endTime}
-                    onChange={(e) => updateCaption(selectedCaption.id, { endTime: parseFloat(e.target.value) })}
-                    className="w-full p-3 bg-black border-2 border-white text-white rounded"
-                  />
-                </div>
-              </div>
-
-              {/* Style Options */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-white font-bold mb-2">Font Size</label>
-                  <input
-                    type="number"
-                    min="12"
-                    max="72"
-                    value={selectedCaption.style.fontSize}
-                    onChange={(e) => updateCaption(selectedCaption.id, { 
-                      style: { ...selectedCaption.style, fontSize: parseInt(e.target.value) }
-                    })}
-                    className="w-full p-3 bg-black border-2 border-white text-white rounded"
-                  />
-                </div>
-                <div>
-                  <label className="block text-white font-bold mb-2">Font Weight</label>
-                  <select
-                    value={selectedCaption.style.fontWeight}
-                    onChange={(e) => updateCaption(selectedCaption.id, { 
-                      style: { ...selectedCaption.style, fontWeight: e.target.value }
-                    })}
-                    className="w-full p-3 bg-black border-2 border-white text-white rounded"
-                  >
-                    <option value="normal">Normal</option>
-                    <option value="bold">Bold</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-white font-bold mb-2">Text Color</label>
-                  <input
-                    type="color"
-                    value={selectedCaption.style.color}
-                    onChange={(e) => updateCaption(selectedCaption.id, { 
-                      style: { ...selectedCaption.style, color: e.target.value }
-                    })}
-                    className="w-full h-12 bg-black border-2 border-white rounded cursor-pointer"
-                  />
-                </div>
-                <div>
-                  <label className="block text-white font-bold mb-2">Position</label>
-                  <select
-                    value={selectedCaption.style.position}
-                    onChange={(e) => updateCaption(selectedCaption.id, { 
-                      style: { ...selectedCaption.style, position: e.target.value as 'top' | 'center' | 'bottom' }
-                    })}
-                    className="w-full p-3 bg-black border-2 border-white text-white rounded"
-                  >
-                    <option value="top">Top</option>
-                    <option value="center">Center</option>
-                    <option value="bottom">Bottom</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-4 mt-6">
-                <button
-                  onClick={() => setShowCaptionEditor(false)}
-                  className="px-6 py-3 bg-black border-2 border-white text-white hover:bg-white hover:text-black rounded font-bold transition-colors"
-                >
-                  Done
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

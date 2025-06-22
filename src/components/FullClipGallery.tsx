@@ -43,7 +43,11 @@ const FullClipGallery: React.FC<FullClipGalleryProps> = ({
     try {
       console.log('Downloading FullClip video:', video.filename);
       
-      const blob = new Blob([video.video_blob], { type: 'video/mp4' });
+      // Create blob with proper MP4 MIME type and codec info
+      const blob = new Blob([video.video_blob], { 
+        type: 'video/mp4; codecs="avc1.42E01E, mp4a.40.2"' 
+      });
+      
       const url = URL.createObjectURL(blob);
       
       const a = document.createElement('a');
@@ -298,11 +302,11 @@ const FullClipGallery: React.FC<FullClipGalleryProps> = ({
                       onError={(e) => console.error('FullClip video error:', e)}
                     />
                     
-                    {/* Caption Overlay (if enabled) */}
+                    {/* Caption Overlay Info */}
                     {showCaptions && selectedVideo.captions && (
                       <div className="absolute bottom-4 left-4 right-4 pointer-events-none">
                         <div className="bg-black/80 text-white p-2 rounded text-sm text-center">
-                          <p>Captions will display during playback</p>
+                          <p>Captions are embedded in the video</p>
                         </div>
                       </div>
                     )}
@@ -329,7 +333,7 @@ const FullClipGallery: React.FC<FullClipGalleryProps> = ({
                       <div className="bg-black border-2 border-white rounded-lg p-4 mb-4">
                         <h5 className="text-white font-bold mb-2">Captions</h5>
                         <p className="text-gray-300 text-sm">
-                          {JSON.parse(selectedVideo.captions).length} caption segments
+                          {JSON.parse(selectedVideo.captions).length} caption segments embedded in video
                         </p>
                       </div>
                     )}
