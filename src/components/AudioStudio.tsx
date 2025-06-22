@@ -191,33 +191,28 @@ Let's dive into the code and see what we can learn together.`;
       const duration = selectedVideo.duration;
       const currentScript = script || '';
 
-      // Create a comprehensive prompt for Grok
-      const systemPrompt = `You are an expert programming instructor creating engaging narration scripts for code demonstration videos. Your goal is to create educational, clear, and engaging commentary that matches the video duration perfectly.`;
+      // Create a comprehensive prompt for Grok - UPDATED to be more natural
+      const systemPrompt = `You are an expert programming instructor creating engaging narration scripts for code demonstration videos. Create natural, conversational commentary that flows smoothly without structural labels or sections.`;
 
-      const userPrompt = `Create a ${duration}-second narration script for a code streaming video with these details:
+      const userPrompt = `Create a natural ${duration}-second narration script for a code streaming video:
 
-**Video Information:**
+**Video Details:**
 - File: ${filename}
 - Language: ${language}
 - Duration: ${duration} seconds
-- Current script (if any): "${currentScript}"
+- Current script: "${currentScript}"
 
 **Requirements:**
-1. Script should take approximately ${duration} seconds to read aloud (aim for ~150 words per minute)
-2. Be educational and engaging for developers learning ${language}
-3. Explain key concepts that would be visible in a ${language} code file
-4. Use a conversational, friendly tone
-5. Include natural pauses and transitions
-6. Focus on practical insights and best practices
-7. Make it suitable for social media (TikTok, Instagram, YouTube Shorts)
+- Script should take approximately ${duration} seconds to read aloud (aim for ~150 words per minute)
+- Write in a natural, conversational tone as if explaining to a friend
+- Be educational and engaging for developers learning ${language}
+- Explain key concepts that would be visible in a ${language} code file
+- Make it suitable for social media (TikTok, Instagram, YouTube Shorts)
+- Flow naturally from start to finish without section breaks
+- Include practical insights and best practices
+- Keep it engaging and easy to follow
 
-**Script Structure:**
-- Hook (first 3-5 seconds): Grab attention
-- Introduction (next 5-10 seconds): What we're looking at
-- Main content (middle portion): Key concepts and explanations
-- Conclusion (last 5-10 seconds): Wrap up with key takeaway
-
-Please generate ONLY the script text, no additional formatting or explanations.`;
+Create ONLY the natural script text - no labels, sections, or formatting. Just write it as you would speak it naturally.`;
 
       const response = await fetch('https://api.x.ai/v1/chat/completions', {
         method: 'POST',
@@ -385,6 +380,7 @@ Please generate ONLY the script text, no additional formatting or explanations.`
           resolve(void 0);
         };
         video.onerror = reject;
+        video.load();
       });
 
       // Set up canvas for rendering
@@ -405,6 +401,7 @@ Please generate ONLY the script text, no additional formatting or explanations.`
           resolve(void 0);
         };
         audio.onerror = reject;
+        audio.load();
       });
 
       // Determine the final duration (use the longer of video or audio)
@@ -461,7 +458,7 @@ Please generate ONLY the script text, no additional formatting or explanations.`
         
         // Create final blob with proper MIME type
         const finalBlob = new Blob(chunks, { 
-          type: mimeType.includes('mp4') ? 'video/mp4' : 'video/webm'
+          type: 'video/mp4'
         });
         
         console.log('Final video size:', finalBlob.size, 'bytes');
@@ -471,7 +468,7 @@ Please generate ONLY the script text, no additional formatting or explanations.`
         const filename = `fullclip-${selectedVideo.original_filename.replace(/\.[^/.]+$/, '')}-${timestamp}.mp4`;
         
         try {
-          await dbManager.saveFullClipVideo(
+          const videoId = await dbManager.saveFullClipVideo(
             filename,
             selectedVideo.original_filename,
             selectedVideo.file_language,
@@ -481,12 +478,22 @@ Please generate ONLY the script text, no additional formatting or explanations.`
             captions
           );
 
-          console.log('FullClip video saved successfully');
+          console.log('FullClip video saved successfully with ID:', videoId);
+          
+          // Notify parent component
           onAudioVideoSaved();
           
-          // Close the studio and show success
+          // Close the studio
           onClose();
-          alert('FullClip video saved successfully! Check the FullClip Gallery to view it.');
+          
+          // Show success and redirect
+          alert('FullClip video saved successfully! Opening FullClip Gallery...');
+          
+          // Trigger opening of FullClip Gallery
+          setTimeout(() => {
+            // This will be handled by the parent component
+            window.dispatchEvent(new CustomEvent('openFullClipGallery'));
+          }, 500);
           
         } catch (saveError) {
           console.error('Failed to save video:', saveError);
@@ -580,7 +587,6 @@ Please generate ONLY the script text, no additional formatting or explanations.`
 
             // Draw each line
             const lineHeight = 35;
-            const totalHeight = lines.length * lineHeight;
             const startY = canvas.height - 80; // Position at bottom
 
             lines.forEach((line, index) => {

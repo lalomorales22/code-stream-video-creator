@@ -40,6 +40,18 @@ const VideoGallery: React.FC<VideoGalleryProps> = ({
     }
   }, [isOpen]);
 
+  // Listen for FullClip Gallery open event
+  useEffect(() => {
+    const handleOpenFullClipGallery = () => {
+      setIsFullClipGalleryOpen(true);
+    };
+
+    window.addEventListener('openFullClipGallery', handleOpenFullClipGallery);
+    return () => {
+      window.removeEventListener('openFullClipGallery', handleOpenFullClipGallery);
+    };
+  }, []);
+
   const loadDbStats = async () => {
     try {
       const stats = await dbManager.getStats();
@@ -187,7 +199,11 @@ const VideoGallery: React.FC<VideoGalleryProps> = ({
 
   const handleAudioVideoSaved = async () => {
     await loadDbStats();
-    // Optionally refresh the video list or show a success message
+    // Close this gallery and open FullClip Gallery
+    onClose();
+    setTimeout(() => {
+      setIsFullClipGalleryOpen(true);
+    }, 300);
   };
 
   const formatDate = (dateString: string) => {
