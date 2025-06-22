@@ -156,6 +156,7 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
     }
   }, [xaiApiKey]);
 
+  // FIXED: Updated generateCustomAvatar function with correct API parameters
   const generateCustomAvatar = async () => {
     if (!xaiApiKey || !customAvatarPrompt.trim()) {
       alert('Please provide XAI API key and avatar description.');
@@ -171,6 +172,9 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
       // Enhanced prompt for better penguin generation
       const enhancedPrompt = `Create a 3d 8bit block style cool penguin with glasses as an avatar for a coding video. ${customAvatarPrompt}. The penguin should be friendly, professional, and suitable for educational content. Style: clean cartoon illustration, high quality, suitable for video overlay.`;
 
+      console.log('Sending request to xAI API with model: grok-2-image-1212');
+      console.log('Prompt:', enhancedPrompt);
+
       const response = await fetch('https://api.x.ai/v1/images/generations', {
         method: 'POST',
         headers: {
@@ -180,25 +184,39 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
         body: JSON.stringify({
           model: 'grok-2-image-1212',
           prompt: enhancedPrompt,
-          n: 1,
-          size: '512x512',
-          quality: 'standard'
+          n: 1
+          // REMOVED: size and quality parameters (not supported by xAI API)
         })
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(`XAI API error: ${response.status} - ${errorData.error?.message || 'Unknown error'}`);
+      console.log('API Response Status:', response.status);
+      
+      // Get response data for debugging
+      const responseText = await response.text();
+      console.log('Raw API Response:', responseText);
+      
+      let data;
+      try {
+        data = JSON.parse(responseText);
+        console.log('Parsed API Response Data:', data);
+      } catch (parseError) {
+        console.error('Failed to parse response as JSON:', parseError);
+        throw new Error(`Invalid JSON response from API: ${responseText.substring(0, 200)}`);
       }
 
-      const data = await response.json();
+      if (!response.ok) {
+        const errorMessage = data.error?.message || data.message || `HTTP ${response.status}`;
+        throw new Error(`XAI API error: ${response.status} - ${errorMessage}`);
+      }
+
       const imageUrl = data.data?.[0]?.url;
 
       if (!imageUrl) {
-        throw new Error('No image generated from XAI API');
+        console.error('No image URL in response:', data);
+        throw new Error('No image generated from XAI API - check response format');
       }
 
-      console.log('Custom penguin avatar generated successfully');
+      console.log('Custom penguin avatar generated successfully:', imageUrl);
       
       // Create new avatar object
       const newAvatar: PenguinAvatar = {
@@ -218,9 +236,13 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
       let errorMessage = 'Failed to generate custom avatar. ';
       if (error instanceof Error) {
         if (error.message.includes('401')) {
-          errorMessage += 'Please check your XAI API key.';
+          errorMessage += 'Please check your XAI API key - it may be invalid or expired.';
         } else if (error.message.includes('429')) {
           errorMessage += 'Rate limit exceeded. Please try again in a moment.';
+        } else if (error.message.includes('400')) {
+          errorMessage += 'Bad request - please check your prompt and try again.';
+        } else if (error.message.includes('403')) {
+          errorMessage += 'Access forbidden - please check your API key permissions.';
         } else {
           errorMessage += error.message;
         }
@@ -697,6 +719,9 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
                       {isGeneratingAvatar ? 'Generating...' : 'Generate'}
                     </button>
                   </div>
+                  <p className="text-gray-400 text-sm mt-2">
+                    Using model: <code className="bg-gray-800 px-2 py-1 rounded">grok-2-image-1212</code>
+                  </p>
                 </div>
 
                 {/* Avatar Selection */}
