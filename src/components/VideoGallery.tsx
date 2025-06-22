@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Play, Download, Trash2, Calendar, Clock, Code, X, Save, AlertCircle, FileAudio, Mic, Loader2, Users } from 'lucide-react';
+import { Play, Download, Trash2, Calendar, Clock, Code, X, Save, AlertCircle, FileAudio, Mic, Loader2, Users, Edit3 } from 'lucide-react';
 import { dbManager, VideoRecord } from '../utils/database';
 import AudioStudio from './AudioStudio';
 import FullClipGallery from './FullClipGallery';
@@ -36,6 +36,10 @@ const VideoGallery: React.FC<VideoGalleryProps> = ({
   const [isShortsGalleryOpen, setIsShortsGalleryOpen] = useState(false);
   const [videoForAudio, setVideoForAudio] = useState<VideoRecord | null>(null);
   const [deletingVideoId, setDeletingVideoId] = useState<number | null>(null);
+  
+  // NEW: File rename state
+  const [customFilename, setCustomFilename] = useState('');
+  const [isEditingFilename, setIsEditingFilename] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -43,6 +47,16 @@ const VideoGallery: React.FC<VideoGalleryProps> = ({
       loadDbStats();
     }
   }, [isOpen]);
+
+  // NEW: Initialize custom filename when pending video changes
+  useEffect(() => {
+    if (pendingVideo) {
+      // Remove extension and timestamp for cleaner default name
+      const baseName = pendingVideo.originalFilename.replace(/\.[^/.]+$/, '');
+      setCustomFilename(baseName);
+      setIsEditingFilename(false);
+    }
+  }, [pendingVideo]);
 
   // Listen for FullClip Gallery open event
   useEffect(() => {
@@ -99,8 +113,12 @@ const VideoGallery: React.FC<VideoGalleryProps> = ({
       console.log('Video blob size:', pendingVideo.blob.size, 'bytes');
       console.log('Video blob type:', pendingVideo.blob.type);
 
+      // NEW: Use custom filename with timestamp
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const finalFilename = `${customFilename}-${timestamp}.mp4`;
+
       const videoId = await dbManager.saveVideo(
-        pendingVideo.filename,
+        finalFilename,
         pendingVideo.originalFilename,
         pendingVideo.language,
         pendingVideo.duration,
@@ -311,14 +329,14 @@ const VideoGallery: React.FC<VideoGalleryProps> = ({
               <div className="p-6 border-b-2 border-white">
                 <h3 className="text-2xl font-bold text-white mb-6">Saved Videos</h3>
                 
-                {/* Pending Video Save */}
+                {/* NEW: Enhanced Pending Video Save with Rename */}
                 {pendingVideo && (
                   <div className="bg-black border-2 border-white rounded-lg p-6 mb-6">
                     <div className="flex items-center justify-between mb-4">
                       <span className="text-white font-bold text-lg">New Recording Ready</span>
                       <button
                         onClick={handleSavePendingVideo}
-                        disabled={savingPending}
+                        disabled={savingPending || !customFilename.trim()}
                         className="flex items-center gap-2 bg-white hover:bg-gray-200 disabled:bg-gray-600 
                                  text-black px-4 py-2 rounded font-bold transition-colors border-2 border-white"
                       >
@@ -326,6 +344,32 @@ const VideoGallery: React.FC<VideoGalleryProps> = ({
                         {savingPending ? 'Saving...' : 'Save to Gallery'}
                       </button>
                     </div>
+                    
+                    {/* File Rename Section */}
+                    <div className="mb-4">
+                      <label className="block text-white font-bold mb-2">Filename</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={customFilename}
+                          onChange={(e) => setCustomFilename(e.target.value)}
+                          placeholder="Enter filename (without extension)"
+                          className="flex-1 p-3 bg-black border-2 border-white text-white rounded font-mono"
+                          disabled={savingPending}
+                        />
+                        <button
+                          onClick={() => setIsEditingFilename(!isEditingFilename)}
+                          className="p-3 bg-black border-2 border-white text-white hover:bg-white hover:text-black rounded transition-colors"
+                          title="Edit filename"
+                        >
+                          <Edit3 className="w-5 h-5" />
+                        </button>
+                      </div>
+                      <p className="text-gray-400 text-sm mt-1">
+                        Final filename: {customFilename || 'untitled'}-[timestamp].mp4
+                      </p>
+                    </div>
+                    
                     <p className="text-lg text-white font-medium">{pendingVideo.originalFilename}</p>
                     <div className="flex items-center gap-6 text-sm text-gray-400 font-medium mt-2">
                       <span>{formatDuration(pendingVideo.duration)}</span>
