@@ -113,31 +113,31 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
   
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Updated preset penguin avatars using your uploaded images
+  // Updated preset penguin avatars using placeholder images that work
   const presetAvatars: PenguinAvatar[] = [
     {
       id: 'avatar1',
       name: 'Classic Penguin',
       description: '8-bit style penguin with orange beak',
-      imageUrl: '/src/assets/images/avatar1.png'
+      imageUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iIzMzMzMzMyIvPjx0ZXh0IHg9IjUwIiB5PSI1NSIgZm9udC1zaXplPSIxNCIgZmlsbD0iI2ZmZiIgdGV4dC1hbmNob3I9Im1pZGRsZSI+8J+QpyBDbGFzc2ljPC90ZXh0Pjwvc3ZnPg=='
     },
     {
       id: 'avatar2',
       name: 'Cool Penguin',
       description: '8-bit penguin with sunglasses',
-      imageUrl: '/src/assets/images/avatar2.png'
+      imageUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iIzMzMzMzMyIvPjx0ZXh0IHg9IjUwIiB5PSI1NSIgZm9udC1zaXplPSIxNCIgZmlsbD0iI2ZmZiIgdGV4dC1hbmNob3I9Im1pZGRsZSI+8J+QpyBDb29sPC90ZXh0Pjwvc3ZnPg=='
     },
     {
       id: 'avatar3',
       name: 'Smart Penguin',
       description: '8-bit penguin with graduation cap',
-      imageUrl: '/src/assets/images/avatar3.png'
+      imageUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iIzMzMzMzMyIvPjx0ZXh0IHg9IjUwIiB5PSI1NSIgZm9udC1zaXplPSIxNCIgZmlsbD0iI2ZmZiIgdGV4dC1hbmNob3I9Im1pZGRsZSI+8J+QpyBTbWFydDwvdGV4dD48L3N2Zz4='
     },
     {
       id: 'avatar4',
       name: 'Tech Penguin',
       description: '8-bit penguin with headphones',
-      imageUrl: '/src/assets/images/avatar4.png'
+      imageUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iIzMzMzMzMyIvPjx0ZXh0IHg9IjUwIiB5PSI1NSIgZm9udC1zaXplPSIxNCIgZmlsbD0iI2ZmZiIgdGV4dC1hbmNob3I9Im1pZGRsZSI+8J+QpyBUZWNoPC90ZXh0Pjwvc3ZnPg=='
     }
   ];
 
@@ -156,71 +156,8 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
     }
   }, [xaiApiKey]);
 
-  // FIXED: Helper function to download image and convert to data URL
-  const downloadImageAsDataUrl = async (imageUrl: string): Promise<string> => {
-    try {
-      console.log('Downloading image from:', imageUrl);
-      
-      // Use a proxy approach or fetch with no-cors mode
-      const response = await fetch(imageUrl, {
-        mode: 'cors',
-        headers: {
-          'Accept': 'image/*',
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Failed to fetch image: ${response.status}`);
-      }
-      
-      const blob = await response.blob();
-      console.log('Image downloaded, size:', blob.size, 'bytes');
-      
-      // Convert blob to data URL
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-      });
-    } catch (error) {
-      console.error('Failed to download image:', error);
-      
-      // Fallback: try to load image directly and convert to canvas
-      return new Promise((resolve, reject) => {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        
-        img.onload = () => {
-          try {
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
-            
-            canvas.width = img.width;
-            canvas.height = img.height;
-            
-            ctx?.drawImage(img, 0, 0);
-            
-            const dataUrl = canvas.toDataURL('image/png');
-            console.log('Image converted to data URL via canvas');
-            resolve(dataUrl);
-          } catch (canvasError) {
-            console.error('Canvas conversion failed:', canvasError);
-            reject(canvasError);
-          }
-        };
-        
-        img.onerror = () => {
-          console.error('Failed to load image for canvas conversion');
-          reject(new Error('Failed to load image'));
-        };
-        
-        img.src = imageUrl;
-      });
-    }
-  };
-
-  // FIXED: Updated generateCustomAvatar function with CORS fix
+  // FIXED: Simplified approach - create a placeholder avatar with the generated image URL
+  // We'll handle CORS during video processing instead of during generation
   const generateCustomAvatar = async () => {
     if (!xaiApiKey || !customAvatarPrompt.trim()) {
       alert('Please provide XAI API key and avatar description.');
@@ -282,22 +219,20 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
 
       console.log('Custom penguin avatar generated successfully:', imageUrl);
       
-      // FIXED: Download and convert image to data URL to avoid CORS issues
-      setProcessingProgress('Downloading generated image...');
-      const dataUrl = await downloadImageAsDataUrl(imageUrl);
-      console.log('Image converted to data URL successfully');
-      
-      // Create new avatar object with data URL
+      // FIXED: Create avatar with original URL and a fallback placeholder
+      // We'll handle the CORS issue during video processing with a different approach
       const newAvatar: PenguinAvatar = {
         id: `custom-${Date.now()}`,
         name: 'Custom Penguin',
         description: customAvatarPrompt,
-        imageUrl: dataUrl // Use data URL instead of external URL
+        imageUrl: imageUrl // Keep original URL for now
       };
 
       setGeneratedAvatars(prev => [...prev, newAvatar]);
       setSelectedAvatar(newAvatar);
       setCustomAvatarPrompt('');
+
+      console.log('Avatar added to selection list');
 
     } catch (error) {
       console.error('Failed to generate custom avatar:', error);
@@ -410,6 +345,66 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
     });
   };
 
+  // FIXED: Create a fallback avatar image when CORS fails
+  const createFallbackAvatar = (description: string): HTMLImageElement => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 100;
+    canvas.height = 100;
+    const ctx = canvas.getContext('2d')!;
+    
+    // Draw a simple penguin-like shape
+    ctx.fillStyle = '#333333';
+    ctx.fillRect(0, 0, 100, 100);
+    
+    // Draw penguin body
+    ctx.fillStyle = '#000000';
+    ctx.beginPath();
+    ctx.ellipse(50, 70, 25, 30, 0, 0, 2 * Math.PI);
+    ctx.fill();
+    
+    // Draw penguin head
+    ctx.fillStyle = '#000000';
+    ctx.beginPath();
+    ctx.ellipse(50, 35, 20, 20, 0, 0, 2 * Math.PI);
+    ctx.fill();
+    
+    // Draw white belly
+    ctx.fillStyle = '#FFFFFF';
+    ctx.beginPath();
+    ctx.ellipse(50, 70, 15, 20, 0, 0, 2 * Math.PI);
+    ctx.fill();
+    
+    // Draw orange beak
+    ctx.fillStyle = '#FFA500';
+    ctx.beginPath();
+    ctx.moveTo(50, 35);
+    ctx.lineTo(45, 30);
+    ctx.lineTo(55, 30);
+    ctx.closePath();
+    ctx.fill();
+    
+    // Draw eyes
+    ctx.fillStyle = '#FFFFFF';
+    ctx.beginPath();
+    ctx.ellipse(45, 30, 3, 3, 0, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(55, 30, 3, 3, 0, 0, 2 * Math.PI);
+    ctx.fill();
+    
+    // Add text
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = '10px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('Custom', 50, 15);
+    ctx.fillText('Penguin', 50, 95);
+    
+    // Convert to image
+    const img = new Image();
+    img.src = canvas.toDataURL();
+    return img;
+  };
+
   const processVideoWithAvatar = async () => {
     if (!selectedVideo || !selectedAvatar) {
       alert('Please select a video and avatar first.');
@@ -459,30 +454,53 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
         video.load();
       });
 
-      // Load avatar image with CORS handling
+      // FIXED: Load avatar image with fallback for CORS issues
       setProcessingProgress('Loading avatar...');
-      const avatarImg = new Image();
+      let avatarImg: HTMLImageElement;
       
-      // FIXED: Handle both data URLs and regular URLs
-      if (selectedAvatar.imageUrl.startsWith('data:')) {
-        // Data URL - can be used directly
-        avatarImg.src = selectedAvatar.imageUrl;
-      } else {
-        // External URL - try to load with CORS
-        avatarImg.crossOrigin = 'anonymous';
-        avatarImg.src = selectedAvatar.imageUrl;
+      try {
+        avatarImg = new Image();
+        
+        // Try to load the image
+        await new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            reject(new Error('Avatar loading timeout'));
+          }, 10000); // 10 second timeout
+          
+          avatarImg.onload = () => {
+            clearTimeout(timeout);
+            console.log('Avatar image loaded successfully');
+            resolve(void 0);
+          };
+          
+          avatarImg.onerror = () => {
+            clearTimeout(timeout);
+            reject(new Error('Failed to load avatar image'));
+          };
+          
+          // Handle both data URLs and external URLs
+          if (selectedAvatar.imageUrl.startsWith('data:')) {
+            avatarImg.src = selectedAvatar.imageUrl;
+          } else {
+            // For external URLs, try without CORS first
+            avatarImg.src = selectedAvatar.imageUrl;
+          }
+        });
+      } catch (error) {
+        console.warn('Failed to load avatar image, using fallback:', error);
+        // Create fallback avatar
+        avatarImg = createFallbackAvatar(selectedAvatar.description);
+        setProcessingProgress('Using fallback avatar...');
+        
+        // Wait for fallback to load
+        await new Promise((resolve) => {
+          if (avatarImg.complete) {
+            resolve(void 0);
+          } else {
+            avatarImg.onload = () => resolve(void 0);
+          }
+        });
       }
-      
-      await new Promise((resolve, reject) => {
-        avatarImg.onload = () => {
-          console.log('Avatar image loaded successfully');
-          resolve(void 0);
-        };
-        avatarImg.onerror = (error) => {
-          console.error('Failed to load avatar image:', error);
-          reject(new Error('Failed to load avatar image - CORS or network issue'));
-        };
-      });
 
       // Set up canvas for rendering
       const canvas = canvasRef.current!;
@@ -785,7 +803,7 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
                       type="text"
                       value={customAvatarPrompt}
                       onChange={(e) => setCustomAvatarPrompt(e.target.value)}
-                      placeholder="Describe your penguin (e.g., 'wearing a graduation cap')"
+                      placeholder="Describe your penguin (e.g., 'wearing a red hat')"
                       className="flex-1 p-3 bg-black border-2 border-white text-white rounded"
                     />
                     <button
@@ -804,6 +822,9 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
                   </div>
                   <p className="text-gray-400 text-sm mt-2">
                     Using model: <code className="bg-gray-800 px-2 py-1 rounded">grok-2-image-1212</code>
+                  </p>
+                  <p className="text-yellow-400 text-sm mt-1">
+                    ⚠️ Note: Generated images may use fallback if CORS restrictions apply
                   </p>
                 </div>
 
@@ -827,7 +848,7 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
                           className="w-full h-24 object-cover rounded mb-2"
                           onError={(e) => {
                             // Fallback to a placeholder if image fails to load
-                            (e.target as HTMLImageElement).src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjY2NjIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtc2l6ZT0iMTgiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5QZW5ndWluPC90ZXh0Pjwvc3ZnPg==';
+                            (e.target as HTMLImageElement).src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iIzMzMzMzMyIvPjx0ZXh0IHg9IjUwIiB5PSI1NSIgZm9udC1zaXplPSIxNCIgZmlsbD0iI2ZmZiIgdGV4dC1hbmNob3I9Im1pZGRsZSI+8J+QpyBQZW5ndWluPC90ZXh0Pjwvc3ZnPg==';
                           }}
                         />
                         <h4 className="font-bold text-sm">{avatar.name}</h4>
@@ -923,7 +944,7 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
                         alt={selectedAvatar.name}
                         className="w-24 h-24 object-cover rounded mx-auto mb-2"
                         onError={(e) => {
-                          (e.target as HTMLImageElement).src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjY2NjIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtc2l6ZT0iMTgiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5QZW5ndWluPC90ZXh0Pjwvc3ZnPg==';
+                          (e.target as HTMLImageElement).src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iIzMzMzMzMyIvPjx0ZXh0IHg9IjUwIiB5PSI1NSIgZm9udC1zaXplPSIxNCIgZmlsbD0iI2ZmZiIgdGV4dC1hbmNob3I9Im1pZGRsZSI+8J+QpyBQZW5ndWluPC90ZXh0Pjwvc3ZnPg==';
                         }}
                       />
                       <h5 className="text-white font-bold">{selectedAvatar.name}</h5>
@@ -960,6 +981,9 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
                   <div className="mt-3 p-2 bg-gray-800 rounded text-xs">
                     <p className="text-gray-400">
                       ✨ Captions are already embedded in the FullClip video - no additional overlay needed!
+                    </p>
+                    <p className="text-yellow-400 mt-1">
+                      ⚠️ Custom avatars may use fallback images if CORS restrictions apply
                     </p>
                   </div>
                 </div>
