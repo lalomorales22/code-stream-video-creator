@@ -67,12 +67,14 @@ const FullClipStudio: React.FC<FullClipStudioProps> = ({
   // Video Creation
   const [isCreatingVideo, setIsCreatingVideo] = useState(false);
   const [creationProgress, setCreationProgress] = useState(0);
+  const [creationStep, setCreationStep] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   
   // Refs
   const audioRef = useRef<HTMLAudioElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
   const avatarFileInputRef = useRef<HTMLInputElement>(null);
   const thumbnailFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -336,9 +338,35 @@ Return only the script text, no additional formatting.`;
     }
   };
 
+  // FIXED: Generate captions from script
+  const generateCaptions = (script: string, audioDuration: number): CaptionSegment[] => {
+    if (!captionsEnabled || !script.trim()) return [];
+
+    // Split script into sentences
+    const sentences = script.split(/[.!?]+/).filter(s => s.trim().length > 0);
+    const captions: CaptionSegment[] = [];
+    
+    // Distribute sentences evenly across audio duration
+    const timePerSentence = audioDuration / sentences.length;
+    
+    sentences.forEach((sentence, index) => {
+      const start = index * timePerSentence;
+      const end = Math.min((index + 1) * timePerSentence, audioDuration);
+      
+      captions.push({
+        start: Math.round(start * 10) / 10,
+        end: Math.round(end * 10) / 10,
+        text: sentence.trim()
+      });
+    });
+
+    return captions;
+  };
+
+  // FIXED: Create composite video with all elements
   const createFullClipVideo = async () => {
-    if (!selectedVideo || !audioBlob) {
-      setError('Video and audio are required');
+    if (!selectedVideo || !audioBlob || !selectedAvatar) {
+      setError('Video, audio, and avatar are required');
       return;
     }
 
@@ -347,49 +375,251 @@ Return only the script text, no additional formatting.`;
     setError(null);
 
     try {
-      // Implementation would create the final video with all components
-      // This is a placeholder for the actual video creation logic
+      setCreationStep('Setting up canvas...');
+      setCreationProgress(10);
+
+      // Create canvas for video composition
+      const canvas = canvasRef.current || document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Could not get canvas context');
+
+      // Set canvas size for vertical video
+      const width = 720;
+      const height = 1280;
+      canvas.width = width;
+      canvas.height = height;
+
+      setCreationStep('Loading original video...');
+      setCreationProgress(20);
+
+      // Create video element for original video
+      const originalVideo = document.createElement('video');
+      originalVideo.src = URL.createObjectURL(new Blob([selectedVideo.video_blob], { type: 'video/mp4' }));
+      originalVideo.muted = true;
       
-      // Simulate progress
-      for (let i = 0; i <= 100; i += 10) {
-        setCreationProgress(i);
-        await new Promise(resolve => setTimeout(resolve, 200));
+      await new Promise((resolve, reject) => {
+        originalVideo.onloadeddata = resolve;
+        originalVideo.onerror = reject;
+        originalVideo.load();
+      });
+
+      setCreationStep('Loading avatar...');
+      setCreationProgress(30);
+
+      // Load avatar image
+      const avatarImg = new Image();
+      const avatarBlob = new Blob([selectedAvatar.image_data], { type: selectedAvatar.image_type });
+      avatarImg.src = URL.createObjectURL(avatarBlob);
+      
+      await new Promise((resolve, reject) => {
+        avatarImg.onload = resolve;
+        avatarImg.onerror = reject;
+      });
+
+      setCreationStep('Loading audio...');
+      setCreationProgress(40);
+
+      // Get audio duration
+      const audio = new Audio();
+      audio.src = URL.createObjectURL(audioBlob);
+      
+      const audioDuration = await new Promise<number>((resolve, reject) => {
+        audio.onloadedmetadata = () => resolve(audio.duration);
+        audio.onerror = reject;
+        audio.load();
+      });
+
+      setCreationStep('Generating captions...');
+      setCreationProgress(50);
+
+      // Generate captions
+      const captions = generateCaptions(script, audioDuration);
+
+      setCreationStep('Creating composite video...');
+      setCreationProgress(60);
+
+      // Set up MediaRecorder for final video
+      const stream = canvas.captureStream(30);
+      
+      // Add audio track to the stream
+      const audioContext = new AudioContext();
+      const audioBuffer = await audioContext.decodeAudioData(await audioBlob.arrayBuffer());
+      const source = audioContext.createBufferSource();
+      source.buffer = audioBuffer;
+      
+      const destination = audioContext.createMediaStreamDestination();
+      source.connect(destination);
+      
+      // Combine video and audio streams
+      const audioTrack = destination.stream.getAudioTracks()[0];
+      if (audioTrack) {
+        stream.addTrack(audioTrack);
       }
 
-      // For now, we'll save the original video as a FullClip
+      // Set up recording
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: 'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+        videoBitsPerSecond: 8000000,
+        audioBitsPerSecond: 128000
+      });
+
+      const recordedChunks: Blob[] = [];
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          recordedChunks.push(event.data);
+        }
+      };
+
+      setCreationStep('Recording composite video...');
+      setCreationProgress(70);
+
+      // Start recording
+      mediaRecorder.start(100);
+      source.start();
+
+      // Animation loop for video composition
+      const startTime = Date.now();
+      const videoDuration = Math.max(selectedVideo.duration, audioDuration) * 1000; // Convert to ms
+      
+      const animate = () => {
+        const currentTime = Date.now() - startTime;
+        const progress = Math.min(currentTime / videoDuration, 1);
+        
+        // Clear canvas
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(0, 0, width, height);
+
+        // Draw original video frame
+        originalVideo.currentTime = (progress * selectedVideo.duration);
+        ctx.drawImage(originalVideo, 0, 0, width, height);
+
+        // Draw avatar
+        const avatarX = avatarPosition.includes('right') ? width - avatarSize - 20 : 20;
+        const avatarY = avatarPosition.includes('bottom') ? height - avatarSize - 20 : 20;
+        
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(avatarX + avatarSize/2, avatarY + avatarSize/2, avatarSize/2, 0, 2 * Math.PI);
+        ctx.clip();
+        ctx.drawImage(avatarImg, avatarX, avatarY, avatarSize, avatarSize);
+        ctx.restore();
+
+        // Draw avatar border
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(avatarX + avatarSize/2, avatarY + avatarSize/2, avatarSize/2, 0, 2 * Math.PI);
+        ctx.stroke();
+
+        // Draw captions
+        if (captionsEnabled) {
+          const currentTimeSeconds = progress * audioDuration;
+          const currentCaption = captions.find(cap => 
+            currentTimeSeconds >= cap.start && currentTimeSeconds <= cap.end
+          );
+
+          if (currentCaption) {
+            ctx.font = `${captionStyle.fontWeight} ${captionStyle.fontSize}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.fillStyle = captionStyle.backgroundColor;
+            ctx.strokeStyle = captionStyle.color;
+            ctx.lineWidth = 2;
+
+            const lines = currentCaption.text.split(' ');
+            const wordsPerLine = 4;
+            const textLines = [];
+            
+            for (let i = 0; i < lines.length; i += wordsPerLine) {
+              textLines.push(lines.slice(i, i + wordsPerLine).join(' '));
+            }
+
+            const lineHeight = captionStyle.fontSize + 8;
+            const totalHeight = textLines.length * lineHeight;
+            const startY = height - 150 - totalHeight;
+
+            textLines.forEach((line, index) => {
+              const y = startY + (index * lineHeight);
+              
+              // Background
+              const textWidth = ctx.measureText(line).width;
+              ctx.fillRect(width/2 - textWidth/2 - 10, y - captionStyle.fontSize, textWidth + 20, captionStyle.fontSize + 10);
+              
+              // Text
+              ctx.fillStyle = captionStyle.color;
+              ctx.fillText(line, width/2, y);
+            });
+          }
+        }
+
+        // Update progress
+        const recordingProgress = 70 + (progress * 20);
+        setCreationProgress(Math.round(recordingProgress));
+
+        if (progress < 1) {
+          requestAnimationFrame(animate);
+        } else {
+          // Stop recording
+          mediaRecorder.stop();
+          source.stop();
+          audioContext.close();
+        }
+      };
+
+      animate();
+
+      // Wait for recording to complete
+      await new Promise<void>((resolve) => {
+        mediaRecorder.onstop = () => {
+          setCreationStep('Finalizing video...');
+          setCreationProgress(90);
+          resolve();
+        };
+      });
+
+      // Create final video blob
+      const finalVideoBlob = new Blob(recordedChunks, { type: 'video/mp4' });
+
+      setCreationStep('Saving to database...');
+      setCreationProgress(95);
+
+      // Save to database
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const filename = `fullclip-${selectedVideo.original_filename.replace(/\.[^/.]+$/, '')}-${timestamp}.mp4`;
       
-      const captions: CaptionSegment[] = captionsEnabled ? [
-        { start: 0, end: 5, text: "Generated captions would appear here" }
-      ] : [];
-
       await dbManager.saveFullClipVideo(
         filename,
         selectedVideo.original_filename,
         selectedVideo.file_language,
-        selectedVideo.duration,
-        new Blob([selectedVideo.video_blob], { type: 'video/mp4' }),
+        Math.max(selectedVideo.duration, audioDuration),
+        finalVideoBlob,
         script,
         captions,
         selectedVideo.original_file_content,
         selectedVideo.display_name || selectedVideo.original_filename
       );
 
-      setSuccess('FullClip video created successfully!');
+      setCreationProgress(100);
+      setCreationStep('Complete!');
+      setSuccess('FullClip video created successfully with audio, captions, and avatar!');
+      
+      // Cleanup
+      URL.revokeObjectURL(originalVideo.src);
+      URL.revokeObjectURL(avatarImg.src);
+      
       onVideoSaved?.();
       
-      // Reset form
+      // Reset form after delay
       setTimeout(() => {
         onClose();
-      }, 2000);
+      }, 3000);
       
     } catch (error) {
       console.error('Failed to create FullClip video:', error);
-      setError('Failed to create FullClip video');
+      setError(`Failed to create FullClip video: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsCreatingVideo(false);
       setCreationProgress(0);
+      setCreationStep('');
     }
   };
 
@@ -417,6 +647,9 @@ Return only the script text, no additional formatting.`;
   return (
     <div className="fixed inset-0 bg-black/95 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-black border-2 border-white rounded-xl w-full max-w-7xl h-[95vh] flex flex-col">
+        {/* Hidden canvas for video composition */}
+        <canvas ref={canvasRef} className="hidden" />
+        
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b-2 border-white">
           <div className="flex items-center gap-4">
@@ -461,6 +694,24 @@ Return only the script text, no additional formatting.`;
             >
               <X className="w-5 h-5" />
             </button>
+          </div>
+        )}
+
+        {/* Creation Progress */}
+        {isCreatingVideo && (
+          <div className="mx-6 mt-4 bg-black border-2 border-blue-500 rounded-lg p-4">
+            <div className="flex items-center gap-3 mb-3">
+              <Loader2 className="w-6 h-6 text-blue-500 animate-spin" />
+              <span className="text-blue-500 font-bold">Creating FullClip Video...</span>
+              <span className="text-white font-bold">{creationProgress}%</span>
+            </div>
+            <div className="w-full bg-gray-700 rounded-full h-3 mb-2">
+              <div 
+                className="bg-blue-500 h-3 rounded-full transition-all duration-300"
+                style={{ width: `${creationProgress}%` }}
+              />
+            </div>
+            <p className="text-gray-400 text-sm">{creationStep}</p>
           </div>
         )}
 
@@ -830,6 +1081,7 @@ Return only the script text, no additional formatting.`;
                   <div className="w-full max-w-lg"> {/* LARGER: Increased from max-w-md */}
                     <div className="relative">
                       <video
+                        ref={videoRef}
                         controls
                         className="w-full bg-black rounded-lg border-2 border-white"
                         style={{ aspectRatio: '9/16' }}
