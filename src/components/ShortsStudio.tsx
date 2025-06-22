@@ -13,7 +13,9 @@ import {
   Loader2,
   RotateCcw,
   Zap,
-  CheckCircle
+  CheckCircle,
+  Upload,
+  Image as ImageIcon
 } from 'lucide-react';
 import { FullClipVideoRecord } from '../utils/database';
 import { dbManager } from '../utils/database';
@@ -106,38 +108,40 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
   const [processingProgress, setProcessingProgress] = useState('');
   const [customAvatarPrompt, setCustomAvatarPrompt] = useState('');
   const [generatedAvatars, setGeneratedAvatars] = useState<PenguinAvatar[]>([]);
+  const [uploadedAvatars, setUploadedAvatars] = useState<PenguinAvatar[]>([]);
   
   // NEW: Success modal state
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [savedVideoFilename, setSavedVideoFilename] = useState('');
   
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Updated preset penguin avatars using placeholder images that work
+  // RESTORED: Original preset penguin avatars using your PNG files
   const presetAvatars: PenguinAvatar[] = [
     {
       id: 'avatar1',
       name: 'Classic Penguin',
       description: '8-bit style penguin with orange beak',
-      imageUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iIzMzMzMzMyIvPjx0ZXh0IHg9IjUwIiB5PSI1NSIgZm9udC1zaXplPSIxNCIgZmlsbD0iI2ZmZiIgdGV4dC1hbmNob3I9Im1pZGRsZSI+8J+QpyBDbGFzc2ljPC90ZXh0Pjwvc3ZnPg=='
+      imageUrl: '/src/assets/images/avatar1.png'
     },
     {
       id: 'avatar2',
       name: 'Cool Penguin',
       description: '8-bit penguin with sunglasses',
-      imageUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iIzMzMzMzMyIvPjx0ZXh0IHg9IjUwIiB5PSI1NSIgZm9udC1zaXplPSIxNCIgZmlsbD0iI2ZmZiIgdGV4dC1hbmNob3I9Im1pZGRsZSI+8J+QpyBDb29sPC90ZXh0Pjwvc3ZnPg=='
+      imageUrl: '/src/assets/images/avatar2.png'
     },
     {
       id: 'avatar3',
       name: 'Smart Penguin',
       description: '8-bit penguin with graduation cap',
-      imageUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iIzMzMzMzMyIvPjx0ZXh0IHg9IjUwIiB5PSI1NSIgZm9udC1zaXplPSIxNCIgZmlsbD0iI2ZmZiIgdGV4dC1hbmNob3I9Im1pZGRsZSI+8J+QpyBTbWFydDwvdGV4dD48L3N2Zz4='
+      imageUrl: '/src/assets/images/avatar3.png'
     },
     {
       id: 'avatar4',
       name: 'Tech Penguin',
       description: '8-bit penguin with headphones',
-      imageUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iIzMzMzMzMyIvPjx0ZXh0IHg9IjUwIiB5PSI1NSIgZm9udC1zaXplPSIxNCIgZmlsbD0iI2ZmZiIgdGV4dC1hbmNob3I9Im1pZGRsZSI+8J+QpyBUZWNoPC90ZXh0Pjwvc3ZnPg=='
+      imageUrl: '/src/assets/images/avatar4.png'
     }
   ];
 
@@ -156,8 +160,45 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
     }
   }, [xaiApiKey]);
 
-  // FIXED: Simplified approach - create a placeholder avatar with the generated image URL
-  // We'll handle CORS during video processing instead of during generation
+  // NEW: Handle image file upload
+  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+    
+    files.forEach(file => {
+      if (file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const imageUrl = e.target?.result as string;
+          
+          const newAvatar: PenguinAvatar = {
+            id: `uploaded-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            name: file.name.replace(/\.[^/.]+$/, ''), // Remove file extension
+            description: `Uploaded image: ${file.name}`,
+            imageUrl: imageUrl
+          };
+          
+          setUploadedAvatars(prev => [...prev, newAvatar]);
+          setSelectedAvatar(newAvatar);
+          console.log('Image uploaded successfully:', file.name);
+        };
+        
+        reader.onerror = (error) => {
+          console.error('Error reading image file:', error);
+          alert('Failed to read image file. Please try again.');
+        };
+        
+        reader.readAsDataURL(file);
+      } else {
+        alert('Please select a valid image file (PNG, JPG, GIF, etc.)');
+      }
+    });
+    
+    // Reset input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
   const generateCustomAvatar = async () => {
     if (!xaiApiKey || !customAvatarPrompt.trim()) {
       alert('Please provide XAI API key and avatar description.');
@@ -219,13 +260,12 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
 
       console.log('Custom penguin avatar generated successfully:', imageUrl);
       
-      // FIXED: Create avatar with original URL and a fallback placeholder
-      // We'll handle the CORS issue during video processing with a different approach
+      // Create avatar with original URL
       const newAvatar: PenguinAvatar = {
         id: `custom-${Date.now()}`,
         name: 'Custom Penguin',
         description: customAvatarPrompt,
-        imageUrl: imageUrl // Keep original URL for now
+        imageUrl: imageUrl
       };
 
       setGeneratedAvatars(prev => [...prev, newAvatar]);
@@ -259,93 +299,7 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
     }
   };
 
-  // FIXED: Improved caption drawing function to avoid double captions
-  const drawCaptions = (ctx: CanvasRenderingContext2D, currentTime: number, captions: CaptionSegment[], canvasWidth: number, canvasHeight: number) => {
-    // Find the active caption for the current time
-    const activeCaption = captions.find(caption => 
-      currentTime >= caption.start && currentTime <= caption.end
-    );
-
-    if (!activeCaption) return;
-
-    // Caption styling - positioned higher to avoid avatar overlap
-    const fontSize = Math.max(24, canvasWidth * 0.04); // Slightly smaller font
-    const lineHeight = fontSize * 1.2;
-    const padding = 16;
-    const maxWidth = canvasWidth - (padding * 2);
-    
-    ctx.font = `bold ${fontSize}px Arial, sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-
-    // Split text into words and wrap lines
-    const words = activeCaption.text.split(' ');
-    const lines: string[] = [];
-    let currentLine = '';
-
-    for (const word of words) {
-      const testLine = currentLine ? `${currentLine} ${word}` : word;
-      const metrics = ctx.measureText(testLine);
-      
-      if (metrics.width > maxWidth && currentLine) {
-        lines.push(currentLine);
-        currentLine = word;
-      } else {
-        currentLine = testLine;
-      }
-    }
-    if (currentLine) {
-      lines.push(currentLine);
-    }
-
-    // Calculate total text height
-    const totalTextHeight = lines.length * lineHeight;
-    
-    // FIXED: Position captions much higher to avoid avatar overlap
-    const textY = canvasHeight - totalTextHeight - padding * 8; // Moved much higher
-    
-    // Draw background for each line with strong contrast
-    lines.forEach((line, index) => {
-      const lineY = textY + (index * lineHeight);
-      const metrics = ctx.measureText(line);
-      const textWidth = metrics.width;
-      
-      // Strong background for readability
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.95)'; // Very strong background
-      ctx.fillRect(
-        (canvasWidth - textWidth) / 2 - padding,
-        lineY - fontSize / 2 - padding / 2,
-        textWidth + padding * 2,
-        fontSize + padding
-      );
-      
-      // Add white border for extra contrast
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(
-        (canvasWidth - textWidth) / 2 - padding,
-        lineY - fontSize / 2 - padding / 2,
-        textWidth + padding * 2,
-        fontSize + padding
-      );
-      
-      // Draw white text with strong shadow
-      ctx.shadowColor = 'rgba(0, 0, 0, 1)';
-      ctx.shadowBlur = 6;
-      ctx.shadowOffsetX = 3;
-      ctx.shadowOffsetY = 3;
-      ctx.fillStyle = 'white';
-      ctx.fillText(line, canvasWidth /2, lineY);
-      
-      // Reset shadow
-      ctx.shadowColor = 'transparent';
-      ctx.shadowBlur = 0;
-      ctx.shadowOffsetX = 0;
-      ctx.shadowOffsetY = 0;
-    });
-  };
-
-  // FIXED: Create a fallback avatar image when CORS fails
+  // Create a fallback avatar image when CORS fails
   const createFallbackAvatar = (description: string): HTMLImageElement => {
     const canvas = document.createElement('canvas');
     canvas.width = 100;
@@ -417,8 +371,7 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
     try {
       console.log('Starting video processing with avatar and audio...');
       
-      // FIXED: Parse captions from the selected video - the FullClip video already has captions embedded
-      // We need to extract them for overlay rendering, but be careful not to double-render
+      // Parse captions from the selected video
       let captions: CaptionSegment[] = [];
       try {
         if (selectedVideo.captions) {
@@ -434,7 +387,7 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
         console.warn('Failed to parse captions:', error);
       }
       
-      // Create video element for the original FullClip video (which has audio AND embedded captions)
+      // Create video element for the original FullClip video
       const videoBlob = new Blob([selectedVideo.video_blob], { type: 'video/mp4' });
       const videoUrl = URL.createObjectURL(videoBlob);
       
@@ -454,7 +407,7 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
         video.load();
       });
 
-      // FIXED: Load avatar image with fallback for CORS issues
+      // Load avatar image with fallback for CORS issues
       setProcessingProgress('Loading avatar...');
       let avatarImg: HTMLImageElement;
       
@@ -510,10 +463,7 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
 
       setProcessingProgress('Setting up audio recording...');
 
-      // FIXED: The FullClip video already has audio embedded, so we capture it directly
-      // We need to capture both video and audio from the video element
-      
-      // Create a MediaStream from the video element (this includes both video and audio)
+      // The FullClip video already has audio embedded, so we capture it directly
       const videoStream = (video as any).captureStream ? (video as any).captureStream(30) : canvas.captureStream(30);
       
       // Get canvas stream for video
@@ -577,7 +527,7 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
         
         setProcessingProgress('Saving to gallery...');
         
-        // FIXED: Generate display name from original video's display name
+        // Generate display name from original video's display name
         const originalDisplayName = selectedVideo.display_name || selectedVideo.original_filename.replace(/\.[^/.]+$/, '');
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         const technicalFilename = `shorts-${originalDisplayName}-${timestamp}.mp4`;
@@ -594,7 +544,7 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
             avatarPosition,
             avatarSize,
             selectedVideo.original_file_content,
-            displayName // FIXED: Pass the display name
+            displayName
           );
 
           console.log('Shorts video with audio saved successfully with ID:', videoId, 'display name:', displayName);
@@ -602,7 +552,7 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
           onShortsVideoSaved();
           
           // Show custom success modal instead of alert
-          setSavedVideoFilename(displayName); // Show display name in success modal
+          setSavedVideoFilename(displayName);
           setShowSuccessModal(true);
           
         } catch (saveError) {
@@ -630,7 +580,7 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
       
       console.log('Playback started with audio, beginning render loop...');
 
-      // Render loop with avatar overlay - FIXED: No additional captions since they're already embedded
+      // Render loop with avatar overlay
       const renderFrame = () => {
         const elapsed = Date.now() - startTime;
         const progress = elapsed / maxDuration;
@@ -695,10 +645,6 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
         ctx.drawImage(avatarImg, avatarX, avatarY, avatarWidth, avatarHeight);
         ctx.globalAlpha = 1;
 
-        // FIXED: DO NOT draw additional captions since the FullClip video already has them embedded
-        // The embedded captions will show through the video element
-        // Only the avatar is added as an overlay
-
         requestAnimationFrame(renderFrame);
       };
 
@@ -726,7 +672,7 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
 
   if (!isOpen) return null;
 
-  const allAvatars = [...presetAvatars, ...generatedAvatars];
+  const allAvatars = [...presetAvatars, ...uploadedAvatars, ...generatedAvatars];
 
   return (
     <>
@@ -795,6 +741,31 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
                   </p>
                 </div>
 
+                {/* Image Upload Section */}
+                <div>
+                  <label className="block text-white font-bold mb-2">Upload Your Own Avatar</label>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      className="flex items-center gap-2 bg-white hover:bg-gray-200 text-black px-4 py-3 rounded font-bold transition-colors border-2 border-white"
+                    >
+                      <Upload className="w-5 h-5" />
+                      Upload Image
+                    </button>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={handleImageUpload}
+                      className="hidden"
+                    />
+                  </div>
+                  <p className="text-gray-400 text-sm mt-2">
+                    Upload PNG, JPG, GIF or other image formats
+                  </p>
+                </div>
+
                 {/* Custom Avatar Generation */}
                 <div>
                   <label className="block text-white font-bold mb-2">Generate Custom Avatar</label>
@@ -848,7 +819,7 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
                           className="w-full h-24 object-cover rounded mb-2"
                           onError={(e) => {
                             // Fallback to a placeholder if image fails to load
-                            (e.target as HTMLImageElement).src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iIzMzMzMzMyIvPjx0ZXh0IHg9IjUwIiB5PSI1NSIgZm9udC1zaXplPSIxNCIgZmlsbD0iI2ZmZiIgdGV4dC1hbmNob3I9Im1pZGRsZSI+8J+QpyBQZW5ndWluPC90ZXh0Pjwvc3ZnPg==';
+                            (e.target as HTMLImageElement).src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iIzMzMzMzMyIvPjx0ZXh0IHg9IjUwIiB5PSI1NSIgZm9udC1zaXplPSIxNCIgZmlsbD0iI2ZmZiIgdGV4dC1hbmNob3I9Im1pZGRsZSI+🐧 Penguin</text></svg>';
                           }}
                         />
                         <h4 className="font-bold text-sm">{avatar.name}</h4>
@@ -944,7 +915,7 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
                         alt={selectedAvatar.name}
                         className="w-24 h-24 object-cover rounded mx-auto mb-2"
                         onError={(e) => {
-                          (e.target as HTMLImageElement).src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iIzMzMzMzMyIvPjx0ZXh0IHg9IjUwIiB5PSI1NSIgZm9udC1zaXplPSIxNCIgZmlsbD0iI2ZmZiIgdGV4dC1hbmNob3I9Im1pZGRsZSI+8J+QpyBQZW5ndWluPC90ZXh0Pjwvc3ZnPg==';
+                          (e.target as HTMLImageElement).src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgZmlsbD0iIzMzMzMzMyIvPjx0ZXh0IHg9IjUwIiB5PSI1NSIgZm9udC1zaXplPSIxNCIgZmlsbD0iI2ZmZiIgdGV4dC1hbmNob3I9Im1pZGRsZSI+🐧 Penguin</text></svg>';
                         }}
                       />
                       <h5 className="text-white font-bold">{selectedAvatar.name}</h5>
@@ -981,9 +952,6 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
                   <div className="mt-3 p-2 bg-gray-800 rounded text-xs">
                     <p className="text-gray-400">
                       ✨ Captions are already embedded in the FullClip video - no additional overlay needed!
-                    </p>
-                    <p className="text-yellow-400 mt-1">
-                      ⚠️ Custom avatars may use fallback images if CORS restrictions apply
                     </p>
                   </div>
                 </div>
