@@ -3,8 +3,8 @@
 **Create stunning vertical videos with streaming code animations, AI-generated narration, and professional captions**
 
 ![Screenshot 2025-06-21 at 4 34 49 PM](https://github.com/user-attachments/assets/c330bf41-0b7b-4a9e-9cf7-c6f3542f1670)
+![Screenshot 2025-06-22 at 3 57 00 PM](https://github.com/user-attachments/assets/d063c409-2bc3-4819-94a9-ff8e3ba2cccb)
 
-![Screenshot 2025-06-21 at 4 34 39 PM](https://github.com/user-attachments/assets/b375a683-e659-4162-a0cc-4110a0342dd7)
 
 ## 🚀 What's New in CodeStream 2.0
 
