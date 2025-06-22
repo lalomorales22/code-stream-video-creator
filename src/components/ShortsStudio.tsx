@@ -178,7 +178,7 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
           'Authorization': `Bearer ${xaiApiKey}`
         },
         body: JSON.stringify({
-          model: 'grok-2-vision-fx',
+          model: 'grok-2-image-1212',
           prompt: enhancedPrompt,
           n: 1,
           size: '512x512',
