@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Play, Download, Trash2, Calendar, Clock, Code, X, Save, AlertCircle, FileAudio, Mic, Loader2 } from 'lucide-react';
+import { Play, Download, Trash2, Calendar, Clock, Code, X, Save, AlertCircle, FileAudio, Mic, Loader2, Users } from 'lucide-react';
 import { dbManager, VideoRecord } from '../utils/database';
 import AudioStudio from './AudioStudio';
 import FullClipGallery from './FullClipGallery';
+import ShortsGallery from './ShortsGallery';
 
 interface VideoGalleryProps {
   isOpen: boolean;
@@ -32,6 +33,7 @@ const VideoGallery: React.FC<VideoGalleryProps> = ({
   const [dbStats, setDbStats] = useState<{ videoCount: number; fullClipCount: number; shortsCount: number; dbSize: number } | null>(null);
   const [isAudioStudioOpen, setIsAudioStudioOpen] = useState(false);
   const [isFullClipGalleryOpen, setIsFullClipGalleryOpen] = useState(false);
+  const [isShortsGalleryOpen, setIsShortsGalleryOpen] = useState(false);
   const [videoForAudio, setVideoForAudio] = useState<VideoRecord | null>(null);
   const [deletingVideoId, setDeletingVideoId] = useState<number | null>(null);
 
@@ -257,12 +259,20 @@ const VideoGallery: React.FC<VideoGalleryProps> = ({
               )}
             </div>
             <div className="flex items-center gap-4">
+              {/* Gallery Navigation Buttons */}
               <button
                 onClick={() => setIsFullClipGalleryOpen(true)}
-                className="flex items-center gap-2 bg-white hover:bg-gray-200 text-black px-4 py-2 rounded-lg font-bold transition-colors border-2 border-white"
+                className="flex items-center gap-2 bg-black hover:bg-white hover:text-black text-white px-4 py-2 rounded-lg font-bold transition-colors border-2 border-white"
               >
                 <FileAudio className="w-5 h-5" />
                 FullClip Gallery
+              </button>
+              <button
+                onClick={() => setIsShortsGalleryOpen(true)}
+                className="flex items-center gap-2 bg-black hover:bg-white hover:text-black text-white px-4 py-2 rounded-lg font-bold transition-colors border-2 border-white"
+              >
+                <Users className="w-5 h-5" />
+                Shorts Gallery
               </button>
               <button
                 onClick={onClose}
@@ -502,6 +512,12 @@ const VideoGallery: React.FC<VideoGalleryProps> = ({
       <FullClipGallery
         isOpen={isFullClipGalleryOpen}
         onClose={() => setIsFullClipGalleryOpen(false)}
+      />
+
+      {/* Shorts Gallery Modal */}
+      <ShortsGallery
+        isOpen={isShortsGalleryOpen}
+        onClose={() => setIsShortsGalleryOpen(false)}
       />
     </>
   );

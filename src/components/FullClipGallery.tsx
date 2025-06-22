@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Play, Download, Trash2, Calendar, Clock, Code, X, FileAudio, Captions, Users, Loader2 } from 'lucide-react';
 import { dbManager, FullClipVideoRecord } from '../utils/database';
 import ShortsStudio from './ShortsStudio';
+import VideoGallery from './VideoGallery';
+import ShortsGallery from './ShortsGallery';
 
 interface FullClipGalleryProps {
   isOpen: boolean;
@@ -18,6 +20,8 @@ const FullClipGallery: React.FC<FullClipGalleryProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [showCaptions, setShowCaptions] = useState(true);
   const [isShortsStudioOpen, setIsShortsStudioOpen] = useState(false);
+  const [isVideoGalleryOpen, setIsVideoGalleryOpen] = useState(false);
+  const [isShortsGalleryOpen, setIsShortsGalleryOpen] = useState(false);
   const [videoForShorts, setVideoForShorts] = useState<FullClipVideoRecord | null>(null);
   const [deletingVideoId, setDeletingVideoId] = useState<number | null>(null);
 
@@ -178,12 +182,29 @@ const FullClipGallery: React.FC<FullClipGalleryProps> = ({
                 {videos.length} videos with audio & captions
               </div>
             </div>
-            <button
-              onClick={onClose}
-              className="p-3 hover:bg-white hover:text-black rounded-lg transition-colors border-2 border-white text-white"
-            >
-              <X className="w-6 h-6" />
-            </button>
+            <div className="flex items-center gap-4">
+              {/* Gallery Navigation Buttons */}
+              <button
+                onClick={() => setIsVideoGalleryOpen(true)}
+                className="flex items-center gap-2 bg-black hover:bg-white hover:text-black text-white px-4 py-2 rounded-lg font-bold transition-colors border-2 border-white"
+              >
+                <Play className="w-5 h-5" />
+                Video Gallery
+              </button>
+              <button
+                onClick={() => setIsShortsGalleryOpen(true)}
+                className="flex items-center gap-2 bg-black hover:bg-white hover:text-black text-white px-4 py-2 rounded-lg font-bold transition-colors border-2 border-white"
+              >
+                <Users className="w-5 h-5" />
+                Shorts Gallery
+              </button>
+              <button
+                onClick={onClose}
+                className="p-3 hover:bg-white hover:text-black rounded-lg transition-colors border-2 border-white text-white"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
           </div>
 
           {/* Error Display */}
@@ -467,6 +488,18 @@ const FullClipGallery: React.FC<FullClipGalleryProps> = ({
         onClose={handleShortsStudioClose}
         selectedVideo={videoForShorts}
         onShortsVideoSaved={handleShortsVideoSaved}
+      />
+
+      {/* Video Gallery Modal */}
+      <VideoGallery
+        isOpen={isVideoGalleryOpen}
+        onClose={() => setIsVideoGalleryOpen(false)}
+      />
+
+      {/* Shorts Gallery Modal */}
+      <ShortsGallery
+        isOpen={isShortsGalleryOpen}
+        onClose={() => setIsShortsGalleryOpen(false)}
       />
     </>
   );
