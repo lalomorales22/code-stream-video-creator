@@ -300,79 +300,96 @@ const FullClipGallery: React.FC<FullClipGalleryProps> = ({
               </div>
             </div>
             
-            <div className="flex-1 flex items-center justify-center p-6">
-              {selectedVideo ? (
-                <div className="w-full max-w-md">
-                  <div className="relative">
-                    <video
-                      key={selectedVideo.id}
-                      controls
-                      className="w-full bg-black rounded-lg border-2 border-white"
-                      style={{ aspectRatio: '9/16' }}
-                      src={URL.createObjectURL(new Blob([selectedVideo.video_blob], { type: 'video/mp4' }))}
-                      onLoadStart={() => console.log('FullClip video loading started')}
-                      onCanPlay={() => console.log('FullClip video can play')}
-                      onError={(e) => {
-                        console.error('FullClip video error:', e);
-                        setError('Failed to load video for playback');
-                      }}
-                    />
-                    
-                    {/* Caption Overlay Info */}
-                    {showCaptions && selectedVideo.captions && (
-                      <div className="absolute bottom-4 left-4 right-4 pointer-events-none">
-                        <div className="bg-black/80 text-white p-2 rounded text-sm text-center">
-                          <p>Captions are embedded in the video</p>
+            {/* FIXED: Added scrollable container for preview content */}
+            <div className="flex-1 overflow-y-auto">
+              <div className="flex items-start justify-center p-6 min-h-full">
+                {selectedVideo ? (
+                  <div className="w-full max-w-md">
+                    <div className="relative">
+                      <video
+                        key={selectedVideo.id}
+                        controls
+                        className="w-full bg-black rounded-lg border-2 border-white"
+                        style={{ aspectRatio: '9/16' }}
+                        src={URL.createObjectURL(new Blob([selectedVideo.video_blob], { type: 'video/mp4' }))}
+                        onLoadStart={() => console.log('FullClip video loading started')}
+                        onCanPlay={() => console.log('FullClip video can play')}
+                        onError={(e) => {
+                          console.error('FullClip video error:', e);
+                          setError('Failed to load video for playback');
+                        }}
+                      />
+                      
+                      {/* Caption Overlay Info */}
+                      {showCaptions && selectedVideo.captions && (
+                        <div className="absolute bottom-4 left-4 right-4 pointer-events-none">
+                          <div className="bg-black/80 text-white p-2 rounded text-sm text-center">
+                            <p>Captions are embedded in the video</p>
+                          </div>
                         </div>
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div className="mt-6 text-center">
-                    <h4 className="font-bold text-xl text-white mb-3">{selectedVideo.original_filename}</h4>
-                    <div className="flex justify-center gap-6 text-lg text-gray-400 font-medium mb-4">
-                      <span className="capitalize">{selectedVideo.file_language}</span>
-                      <span>{formatDuration(selectedVideo.duration)}</span>
-                      <span>{formatFileSize(selectedVideo.video_blob.length)}</span>
+                      )}
                     </div>
                     
-                    {/* Script Display */}
-                    {selectedVideo.script && (
-                      <div className="bg-black border-2 border-white rounded-lg p-4 mb-4 text-left">
-                        <h5 className="text-white font-bold mb-2">Audio Script</h5>
-                        <p className="text-gray-300 text-sm leading-relaxed">{selectedVideo.script}</p>
+                    <div className="mt-6 text-center">
+                      <h4 className="font-bold text-xl text-white mb-3">{selectedVideo.original_filename}</h4>
+                      <div className="flex justify-center gap-6 text-lg text-gray-400 font-medium mb-4">
+                        <span className="capitalize">{selectedVideo.file_language}</span>
+                        <span>{formatDuration(selectedVideo.duration)}</span>
+                        <span>{formatFileSize(selectedVideo.video_blob.length)}</span>
                       </div>
-                    )}
+                      
+                      {/* Script Display - FIXED: Now scrollable */}
+                      {selectedVideo.script && (
+                        <div className="bg-black border-2 border-white rounded-lg p-4 mb-4 text-left max-h-64 overflow-y-auto">
+                          <h5 className="text-white font-bold mb-2 sticky top-0 bg-black">Audio Script</h5>
+                          <p className="text-gray-300 text-sm leading-relaxed">{selectedVideo.script}</p>
+                        </div>
+                      )}
 
-                    {/* Captions Info */}
-                    {selectedVideo.captions && (
-                      <div className="bg-black border-2 border-white rounded-lg p-4 mb-4">
-                        <h5 className="text-white font-bold mb-2">Captions</h5>
-                        <p className="text-gray-300 text-sm">
-                          {JSON.parse(selectedVideo.captions).length} caption segments embedded in video
-                        </p>
+                      {/* Captions Info - FIXED: Now scrollable */}
+                      {selectedVideo.captions && (
+                        <div className="bg-black border-2 border-white rounded-lg p-4 mb-4 max-h-48 overflow-y-auto">
+                          <h5 className="text-white font-bold mb-2 sticky top-0 bg-black">Captions</h5>
+                          <div className="space-y-2">
+                            <p className="text-gray-300 text-sm mb-3">
+                              {JSON.parse(selectedVideo.captions).length} caption segments embedded in video
+                            </p>
+                            
+                            {/* Show caption segments */}
+                            <div className="space-y-2 text-xs">
+                              {JSON.parse(selectedVideo.captions).map((caption: any, index: number) => (
+                                <div key={index} className="bg-gray-800 p-2 rounded">
+                                  <div className="text-gray-400 mb-1">
+                                    {Math.round(caption.startTime)}s - {Math.round(caption.endTime)}s
+                                  </div>
+                                  <div className="text-gray-200">{caption.text}</div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      
+                      <div className="flex gap-4 justify-center">
+                        <button
+                          onClick={() => handleDownloadVideo(selectedVideo)}
+                          className="bg-white hover:bg-gray-200 text-black px-6 py-3 rounded-lg font-bold 
+                                   transition-colors border-2 border-white flex items-center gap-2"
+                        >
+                          <Download className="w-5 h-5" />
+                          Download MP4
+                        </button>
                       </div>
-                    )}
-                    
-                    <div className="flex gap-4 justify-center">
-                      <button
-                        onClick={() => handleDownloadVideo(selectedVideo)}
-                        className="bg-white hover:bg-gray-200 text-black px-6 py-3 rounded-lg font-bold 
-                                 transition-colors border-2 border-white flex items-center gap-2"
-                      >
-                        <Download className="w-5 h-5" />
-                        Download MP4
-                      </button>
                     </div>
                   </div>
-                </div>
-              ) : (
-                <div className="text-center text-gray-400">
-                  <FileAudio className="w-20 h-20 mx-auto mb-6 opacity-50" />
-                  <p className="text-2xl font-bold">Select a video to preview</p>
-                  <p className="text-lg mt-2">Click on any FullClip video to play it with audio</p>
-                </div>
-              )}
+                ) : (
+                  <div className="text-center text-gray-400 flex flex-col items-center justify-center min-h-full">
+                    <FileAudio className="w-20 h-20 mx-auto mb-6 opacity-50" />
+                    <p className="text-2xl font-bold">Select a video to preview</p>
+                    <p className="text-lg mt-2">Click on any FullClip video to play it with audio</p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

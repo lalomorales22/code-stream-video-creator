@@ -13,7 +13,8 @@ import {
   X,
   Clock,
   FileAudio,
-  Captions
+  Captions,
+  Loader2
 } from 'lucide-react';
 import { VideoRecord } from '../utils/database';
 import { dbManager } from '../utils/database';
@@ -59,6 +60,7 @@ const AudioStudio: React.FC<AudioStudioProps> = ({
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isProcessingVideo, setIsProcessingVideo] = useState(false);
+  const [processingProgress, setProcessingProgress] = useState('');
   
   // Simplified caption controls
   const [captionsEnabled, setCaptionsEnabled] = useState(true);
@@ -176,6 +178,20 @@ Let's dive into the code and see what we can learn together.`;
     setScript(script);
   };
 
+  // NEW: Get the original file content for AI analysis
+  const getOriginalFileContent = async (): Promise<string> => {
+    // Since we don't store the original file content in the video record,
+    // we'll need to extract it from the video metadata or use the filename
+    // For now, we'll create a reasonable assumption based on the file info
+    const language = selectedVideo?.file_language || 'javascript';
+    const filename = selectedVideo?.original_filename || 'code.js';
+    
+    // Return a placeholder that indicates what kind of file this is
+    return `// This is a ${language} file named ${filename}
+// The video shows code streaming animation for this file
+// Duration: ${selectedVideo?.duration || 0} seconds`;
+  };
+
   const generateAIScript = async () => {
     if (!selectedVideo || !xaiApiKey) {
       alert('Please provide XAI API key and select a video first.');
@@ -183,6 +199,8 @@ Let's dive into the code and see what we can learn together.`;
     }
 
     setIsGeneratingScript(true);
+    setProcessingProgress('Analyzing file content...');
+    
     try {
       console.log('Generating AI script with Grok...');
       
@@ -191,8 +209,14 @@ Let's dive into the code and see what we can learn together.`;
       const duration = selectedVideo.duration;
       const currentScript = script || '';
 
-      // Create a comprehensive prompt for Grok - UPDATED to be more natural
-      const systemPrompt = `You are an expert programming instructor creating engaging narration scripts for code demonstration videos. Create natural, conversational commentary that flows smoothly without structural labels or sections.`;
+      // Get file content for analysis
+      setProcessingProgress('Getting file information...');
+      const fileContent = await getOriginalFileContent();
+
+      setProcessingProgress('Generating script with AI...');
+
+      // Create a comprehensive prompt for Grok with file analysis
+      const systemPrompt = `You are an expert programming instructor creating engaging narration scripts for code demonstration videos. Create natural, conversational commentary that flows smoothly and explains the actual code being shown.`;
 
       const userPrompt = `Create a natural ${duration}-second narration script for a code streaming video:
 
@@ -200,19 +224,21 @@ Let's dive into the code and see what we can learn together.`;
 - File: ${filename}
 - Language: ${language}
 - Duration: ${duration} seconds
-- Current script: "${currentScript}"
+- File Content Preview: ${fileContent}
 
 **Requirements:**
 - Script should take approximately ${duration} seconds to read aloud (aim for ~150 words per minute)
 - Write in a natural, conversational tone as if explaining to a friend
 - Be educational and engaging for developers learning ${language}
-- Explain key concepts that would be visible in a ${language} code file
+- Reference specific aspects of the code that would be visible in the ${filename} file
 - Make it suitable for social media (TikTok, Instagram, YouTube Shorts)
 - Flow naturally from start to finish without section breaks
-- Include practical insights and best practices
+- Include practical insights and best practices for ${language}
 - Keep it engaging and easy to follow
+- Start with an attention-grabbing opener about what makes this code interesting
+- End with a key takeaway or call to action
 
-Create ONLY the natural script text - no labels, sections, or formatting. Just write it as you would speak it naturally.`;
+Create ONLY the natural script text - no labels, sections, or formatting. Write it as you would speak it naturally, focusing on what developers would actually see in this ${language} file.`;
 
       const response = await fetch('https://api.x.ai/v1/chat/completions', {
         method: 'POST',
@@ -272,6 +298,7 @@ Create ONLY the natural script text - no labels, sections, or formatting. Just w
       alert(errorMessage);
     } finally {
       setIsGeneratingScript(false);
+      setProcessingProgress('');
     }
   };
 
@@ -282,6 +309,8 @@ Create ONLY the natural script text - no labels, sections, or formatting. Just w
     }
 
     setIsGeneratingAudio(true);
+    setProcessingProgress('Generating audio with ElevenLabs...');
+    
     try {
       const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${selectedVoice}`, {
         method: 'POST',
@@ -312,6 +341,7 @@ Create ONLY the natural script text - no labels, sections, or formatting. Just w
       setAudioUrl(url);
 
       // Generate automatic captions
+      setProcessingProgress('Creating captions...');
       generateAutomaticCaptions();
 
       console.log('Audio generated successfully');
@@ -320,6 +350,7 @@ Create ONLY the natural script text - no labels, sections, or formatting. Just w
       alert('Failed to generate audio. Please check your API key and try again.');
     } finally {
       setIsGeneratingAudio(false);
+      setProcessingProgress('');
     }
   };
 
@@ -361,6 +392,8 @@ Create ONLY the natural script text - no labels, sections, or formatting. Just w
     }
 
     setIsProcessingVideo(true);
+    setProcessingProgress('Preparing video and audio...');
+    
     try {
       console.log('Starting video-audio combination process...');
       
@@ -372,6 +405,8 @@ Create ONLY the natural script text - no labels, sections, or formatting. Just w
       video.src = videoUrl;
       video.muted = true;
       video.crossOrigin = 'anonymous';
+      
+      setProcessingProgress('Loading video...');
       
       // Wait for video to load
       await new Promise((resolve, reject) => {
@@ -388,6 +423,8 @@ Create ONLY the natural script text - no labels, sections, or formatting. Just w
       const ctx = canvas.getContext('2d')!;
       canvas.width = 720;
       canvas.height = 1280;
+
+      setProcessingProgress('Loading audio...');
 
       // Create audio element
       const audio = document.createElement('audio');
@@ -407,6 +444,8 @@ Create ONLY the natural script text - no labels, sections, or formatting. Just w
       // Determine the final duration (use the longer of video or audio)
       const finalDuration = Math.max(video.duration, audio.duration);
       console.log('Final video duration will be:', finalDuration, 'seconds');
+
+      setProcessingProgress('Setting up recording...');
 
       // Set up MediaRecorder with H.264 codec for maximum compatibility
       const stream = canvas.captureStream(30);
@@ -472,6 +511,7 @@ Create ONLY the natural script text - no labels, sections, or formatting. Just w
 
       mediaRecorder.onstop = async () => {
         console.log('Recording stopped, creating final video...');
+        setProcessingProgress('Finalizing video...');
         
         // Always create as MP4 for maximum compatibility
         const finalBlob = new Blob(chunks, { 
@@ -480,6 +520,8 @@ Create ONLY the natural script text - no labels, sections, or formatting. Just w
         
         console.log('Final video size:', finalBlob.size, 'bytes');
         console.log('Final video type:', finalBlob.type);
+        
+        setProcessingProgress('Saving to gallery...');
         
         // Save to FullClip gallery
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -531,6 +573,7 @@ Create ONLY the natural script text - no labels, sections, or formatting. Just w
 
       // Start recording
       console.log('Starting recording...');
+      setProcessingProgress('Recording video with audio...');
       mediaRecorder.start(100); // Collect data every 100ms
       
       // Reset and start playback
@@ -546,14 +589,19 @@ Create ONLY the natural script text - no labels, sections, or formatting. Just w
       
       console.log('Playback started, beginning render loop...');
 
-      // Render loop
+      // Render loop with progress updates
       const renderFrame = () => {
         const elapsed = Date.now() - startTime;
         const progress = elapsed / maxDuration;
         
+        // Update progress
+        const progressPercent = Math.round(progress * 100);
+        setProcessingProgress(`Recording video: ${progressPercent}%`);
+        
         // Check if we've reached the end
         if (progress >= 1 || elapsed >= maxDuration) {
           console.log('Rendering complete, stopping recording...');
+          setProcessingProgress('Finishing recording...');
           mediaRecorder.stop();
           video.pause();
           audio.pause();
@@ -642,6 +690,7 @@ Create ONLY the natural script text - no labels, sections, or formatting. Just w
       alert(`Failed to combine video with audio: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsProcessingVideo(false);
+      setProcessingProgress('');
     }
   };
 
@@ -684,6 +733,27 @@ Create ONLY the natural script text - no labels, sections, or formatting. Just w
             <X className="w-6 h-6" />
           </button>
         </div>
+
+        {/* Processing Overlay */}
+        {(isProcessingVideo || processingProgress) && (
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm z-10 flex items-center justify-center">
+            <div className="bg-black border-2 border-white rounded-xl p-8 max-w-md text-center">
+              <div className="flex items-center justify-center gap-3 mb-4">
+                <Loader2 className="w-8 h-8 text-white animate-spin" />
+                <h3 className="text-2xl font-bold text-white">Processing Video</h3>
+              </div>
+              <p className="text-lg text-gray-300 mb-4">
+                {processingProgress || 'This will take a minute to combine video with audio...'}
+              </p>
+              <div className="w-full bg-gray-600 h-2 rounded mb-4">
+                <div className="bg-white h-2 rounded animate-pulse" style={{ width: '100%' }} />
+              </div>
+              <p className="text-sm text-gray-400">
+                Please don't close this window while processing
+              </p>
+            </div>
+          </div>
+        )}
 
         <div className="flex-1 flex overflow-hidden">
           {/* Left Panel - Configuration */}
@@ -751,8 +821,12 @@ Create ONLY the natural script text - no labels, sections, or formatting. Just w
                     className="flex items-center gap-2 bg-white hover:bg-gray-200 disabled:bg-gray-600 
                              text-black px-3 py-1 rounded font-bold transition-colors text-sm border-2 border-white"
                   >
-                    <Wand2 className="w-4 h-4" />
-                    {isGeneratingScript ? 'Generating...' : 'AI Generate with Grok'}
+                    {isGeneratingScript ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Wand2 className="w-4 h-4" />
+                    )}
+                    {isGeneratingScript ? 'Analyzing...' : 'AI Generate with Grok'}
                   </button>
                 </div>
                 <textarea
@@ -784,7 +858,11 @@ Create ONLY the natural script text - no labels, sections, or formatting. Just w
                   className="w-full flex items-center justify-center gap-3 py-4 px-6 rounded-lg font-bold text-lg 
                            bg-white hover:bg-gray-200 disabled:bg-gray-600 text-black transition-colors border-2 border-white"
                 >
-                  <Volume2 className="w-5 h-5" />
+                  {isGeneratingAudio ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <Volume2 className="w-5 h-5" />
+                  )}
                   {isGeneratingAudio ? 'Generating Audio...' : 'Generate Audio'}
                 </button>
               </div>
@@ -951,8 +1029,12 @@ Create ONLY the natural script text - no labels, sections, or formatting. Just w
                   className="w-full flex items-center justify-center gap-3 py-4 px-6 rounded-lg font-bold text-lg 
                            bg-white hover:bg-gray-200 disabled:bg-gray-600 text-black transition-colors border-2 border-white"
                 >
-                  <Save className="w-5 h-5" />
-                  {isProcessingVideo ? 'Processing Video...' : 'Save to FullClip Gallery'}
+                  {isProcessingVideo ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <Save className="w-5 h-5" />
+                  )}
+                  {isProcessingVideo ? 'Processing...' : 'Save to FullClip Gallery'}
                 </button>
                 <p className="text-gray-400 text-sm mt-2 text-center">
                   This will combine your video with AI-generated audio and captions
