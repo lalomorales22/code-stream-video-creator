@@ -406,8 +406,8 @@ Return only the script text, no additional formatting.`;
       setCreationStep('Loading avatar...');
       setCreationProgress(30);
 
-      // Load avatar image
-      const avatarImg = new Image();
+      // Load avatar image - FIXED: Use window.Image() instead of new Image()
+      const avatarImg = new window.Image();
       const avatarBlob = new Blob([selectedAvatar.image_data], { type: selectedAvatar.image_type });
       avatarImg.src = URL.createObjectURL(avatarBlob);
       
