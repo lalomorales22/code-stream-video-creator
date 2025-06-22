@@ -55,31 +55,31 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
   
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Preset penguin avatars
+  // Updated preset penguin avatars using your uploaded images
   const presetAvatars: PenguinAvatar[] = [
     {
-      id: 'classic',
+      id: 'avatar1',
       name: 'Classic Penguin',
-      description: 'Traditional black and white penguin',
-      imageUrl: 'https://images.pexels.com/photos/54508/emperor-penguins-antarctica-life-in-the-cold-54508.jpeg?auto=compress&cs=tinysrgb&w=200&h=200&fit=crop'
+      description: '8-bit style penguin with orange beak',
+      imageUrl: '/src/assets/images/avatar1.png'
     },
     {
-      id: 'cool',
+      id: 'avatar2',
       name: 'Cool Penguin',
-      description: 'Penguin with sunglasses',
-      imageUrl: 'https://i.pinimg.com/564x/e7/d7/37/e7d73718c57486e969a5a3a41c554900.jpg'
+      description: '8-bit penguin with sunglasses',
+      imageUrl: '/src/assets/images/avatar2.png'
     },
     {
-      id: 'baby',
-      name: 'Baby Penguin',
-      description: 'Cute baby penguin',
-      imageUrl: 'https://images.pexels.com/photos/1059945/pexels-photo-1059945.jpeg?auto=compress&cs=tinysrgb&w=200&h=200&fit=crop'
+      id: 'avatar3',
+      name: 'Smart Penguin',
+      description: '8-bit penguin with graduation cap',
+      imageUrl: '/src/assets/images/avatar3.png'
     },
     {
-      id: 'emperor',
-      name: 'Emperor Penguin',
-      description: 'Majestic emperor penguin',
-      imageUrl: 'https://images.pexels.com/photos/207833/pexels-photo-207833.jpeg?auto=compress&cs=tinysrgb&w=200&h=200&fit=crop'
+      id: 'avatar4',
+      name: 'Tech Penguin',
+      description: '8-bit penguin with headphones',
+      imageUrl: '/src/assets/images/avatar4.png'
     }
   ];
 
@@ -110,7 +110,7 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
     try {
       console.log('Generating custom penguin avatar with Grok Vision...');
       
-      // Enhanced prompt for better penguin generation (removed "transparent background")
+      // Enhanced prompt for better penguin generation
       const enhancedPrompt = `Create a 3d 8bit block style cool penguin with glasses as an avatar for a coding video. ${customAvatarPrompt}. The penguin should be friendly, professional, and suitable for educational content. Style: clean cartoon illustration, high quality, suitable for video overlay.`;
 
       const response = await fetch('https://api.x.ai/v1/images/generations', {
@@ -120,7 +120,7 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
           'Authorization': `Bearer ${xaiApiKey}`
         },
         body: JSON.stringify({
-          model: 'grok-2-image-1212',
+          model: 'grok-2-vision-fx',
           prompt: enhancedPrompt,
           n: 1,
           size: '512x512',
