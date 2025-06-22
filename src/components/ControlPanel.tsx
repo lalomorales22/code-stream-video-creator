@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Pause, Square, Film, Settings, Zap, Clock, GalleryVertical as Gallery, RotateCcw, FileAudio, Users } from 'lucide-react';
+import { Play, Pause, Square, Film, Settings, Zap, Clock, GalleryVertical as Gallery, RotateCcw, FileAudio } from 'lucide-react';
 import { FileData } from '../App';
 
 interface ControlPanelProps {
@@ -12,8 +12,7 @@ interface ControlPanelProps {
   onOpenGallery: () => void;
   onResetStream: () => void;
   selectedFile: FileData | null;
-  onOpenFullClipGallery?: () => void;
-  onOpenShortsGallery?: () => void;
+  onOpenFullClipStudio?: () => void;
 }
 
 const ControlPanel: React.FC<ControlPanelProps> = ({
@@ -26,32 +25,25 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
   onOpenGallery,
   onResetStream,
   selectedFile,
-  onOpenFullClipGallery,
-  onOpenShortsGallery
+  onOpenFullClipStudio
 }) => {
-  // Calculate estimated duration with new ultra-fast algorithm
+  // Calculate estimated duration with ultra-fast algorithm
   const calculateEstimatedDuration = (fileLength: number, speed: number): string => {
     if (!fileLength) return '0s';
     
     let estimatedSeconds: number;
     
     if (speed >= 95) {
-      // LUDICROUS SPEED: Entire file in ~10-20 seconds
       estimatedSeconds = Math.max(10, fileLength / 1000);
     } else if (speed >= 90) {
-      // EXTREME SPEED: ~20-40 seconds
       estimatedSeconds = Math.max(15, fileLength / 500);
     } else if (speed >= 80) {
-      // VERY FAST: ~30-60 seconds
       estimatedSeconds = Math.max(20, fileLength / 200);
     } else if (speed >= 60) {
-      // FAST: ~1-2 minutes
       estimatedSeconds = Math.max(30, fileLength / 100);
     } else if (speed >= 40) {
-      // MEDIUM FAST: ~2-4 minutes
       estimatedSeconds = Math.max(60, fileLength / 50);
     } else {
-      // NORMAL: Traditional calculation
       estimatedSeconds = Math.max(120, fileLength / (speed / 10));
     }
     
@@ -127,7 +119,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
         </div>
       </div>
 
-      {/* Speed Control - ULTRA FAST: Extreme speed enhancement */}
+      {/* Speed Control */}
       <div className="mb-10">
         <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-3">
           <div className="p-1 border-2 border-white rounded">
@@ -160,7 +152,6 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
             <span>EXTREME</span>
           </div>
           
-          {/* Enhanced speed indicators with ultra-fast descriptions */}
           <div className="text-xs text-gray-400 text-center font-medium">
             {speed <= 20 && "📚 Perfect for tutorials and detailed explanations"}
             {speed > 20 && speed <= 40 && "⚡ Good balance of speed and readability"}
@@ -171,7 +162,6 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
             {speed > 95 && "🚀🚀 LUDICROUS SPEED - entire file in seconds!"}
           </div>
           
-          {/* Speed performance indicator */}
           <div className="bg-black border-2 border-white rounded p-3">
             <div className="text-xs text-white font-bold mb-1">Performance Mode:</div>
             <div className="text-xs text-gray-300">
@@ -211,7 +201,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
             {isRecording ? 'Stop Recording' : 'Start Recording'}
           </button>
 
-          {/* UPDATED: Gallery buttons with Shorts Gallery */}
+          {/* Gallery buttons */}
           <div className="grid grid-cols-1 gap-3">
             <button
               onClick={onOpenGallery}
@@ -223,21 +213,12 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
             </button>
             
             <button
-              onClick={onOpenFullClipGallery}
+              onClick={onOpenFullClipStudio}
               className="w-full flex items-center justify-center gap-3 py-3 px-6 rounded-lg font-bold text-lg
                        bg-black border-2 border-white text-white hover:bg-white hover:text-black transition-all duration-200"
             >
               <FileAudio className="w-5 h-5" />
               FullClip Gallery
-            </button>
-
-            <button
-              onClick={onOpenShortsGallery}
-              className="w-full flex items-center justify-center gap-3 py-3 px-6 rounded-lg font-bold text-lg
-                       bg-black border-2 border-white text-white hover:bg-white hover:text-black transition-all duration-200"
-            >
-              <Users className="w-5 h-5" />
-              Shorts Gallery
             </button>
           </div>
         </div>
@@ -277,7 +258,6 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
               </span>
             </div>
             
-            {/* Speed performance indicator for current file */}
             {speed >= 80 && (
               <div className="mt-4 p-3 bg-gray-800 rounded border border-gray-600">
                 <div className="text-xs text-yellow-400 font-bold mb-1">⚡ ULTRA-FAST MODE ACTIVE</div>

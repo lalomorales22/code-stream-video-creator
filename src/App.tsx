@@ -4,6 +4,7 @@ import FileManager from './components/FileManager';
 import CodeStreamer from './components/CodeStreamer';
 import ControlPanel from './components/ControlPanel';
 import UnifiedGallery from './components/UnifiedGallery';
+import FullClipStudio from './components/FullClipStudio';
 import ColorCustomizer, { ColorScheme } from './components/ColorCustomizer';
 
 export interface FileData {
@@ -34,9 +35,11 @@ function App() {
   const [streamSpeed, setStreamSpeed] = useState(50);
   const [isRecording, setIsRecording] = useState(false);
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
-  const [galleryTab, setGalleryTab] = useState<'videos' | 'fullclip' | 'shorts'>('videos');
+  const [galleryTab, setGalleryTab] = useState<'videos' | 'fullclip'>('videos');
   const [isColorCustomizerOpen, setIsColorCustomizerOpen] = useState(false);
   const [colorScheme, setColorScheme] = useState<ColorScheme>(defaultColorScheme);
+  const [isFullClipStudioOpen, setIsFullClipStudioOpen] = useState(false);
+  const [videoForFullClip, setVideoForFullClip] = useState<any>(null);
   const [pendingVideo, setPendingVideo] = useState<{
     blob: Blob;
     filename: string;
@@ -63,7 +66,6 @@ function App() {
 
   const handleResetStream = () => {
     setIsStreaming(false);
-    // Force a re-render by briefly changing the selected file
     const currentFile = selectedFile;
     setSelectedFile(null);
     setTimeout(() => {
@@ -78,11 +80,9 @@ function App() {
   const handleRecordingData = async (blob: Blob, duration: number) => {
     if (!selectedFile) return;
 
-    // Generate filename with timestamp
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const fileName = `code-stream-${selectedFile.name.replace(/\.[^/.]+$/, '')}-${timestamp}.mp4`;
     
-    // Set pending video for user to save to gallery
     setPendingVideo({
       blob,
       filename: fileName,
@@ -92,7 +92,6 @@ function App() {
       content: selectedFile.content
     });
 
-    // Auto-open gallery to show the new recording
     setGalleryTab('videos');
     setIsGalleryOpen(true);
     
@@ -103,13 +102,18 @@ function App() {
     setPendingVideo(null);
   };
 
-  const handleOpenGallery = (tab: 'videos' | 'fullclip' | 'shorts' = 'videos') => {
+  const handleOpenGallery = (tab: 'videos' | 'fullclip' = 'videos') => {
     setGalleryTab(tab);
     setIsGalleryOpen(true);
   };
 
   const handleCloseGallery = () => {
     setIsGalleryOpen(false);
+  };
+
+  const handleOpenFullClipStudio = () => {
+    setGalleryTab('fullclip');
+    setIsGalleryOpen(true);
   };
 
   const handleColorSchemeChange = (newColorScheme: ColorScheme) => {
@@ -119,6 +123,20 @@ function App() {
   const handleToggleColorCustomizer = () => {
     setIsColorCustomizerOpen(!isColorCustomizerOpen);
   };
+
+  // Listen for custom events from gallery
+  React.useEffect(() => {
+    const handleOpenFullClipGallery = () => {
+      setGalleryTab('fullclip');
+      setIsGalleryOpen(true);
+    };
+
+    window.addEventListener('openFullClipGallery', handleOpenFullClipGallery);
+    
+    return () => {
+      window.removeEventListener('openFullClipGallery', handleOpenFullClipGallery);
+    };
+  }, []);
 
   return (
     <div className="min-h-screen bg-black text-white relative">
@@ -181,8 +199,7 @@ function App() {
               onOpenGallery={() => handleOpenGallery('videos')}
               onResetStream={handleResetStream}
               selectedFile={selectedFile}
-              onOpenFullClipGallery={() => handleOpenGallery('fullclip')}
-              onOpenShortsGallery={() => handleOpenGallery('shorts')}
+              onOpenFullClipStudio={handleOpenFullClipStudio}
             />
           </div>
         </div>
@@ -229,6 +246,18 @@ function App() {
         initialTab={galleryTab}
         pendingVideo={pendingVideo}
         onPendingVideoSaved={handlePendingVideoSaved}
+      />
+
+      {/* FullClip Studio Modal */}
+      <FullClipStudio
+        isOpen={isFullClipStudioOpen}
+        onClose={() => setIsFullClipStudioOpen(false)}
+        selectedVideo={videoForFullClip}
+        onVideoSaved={() => {
+          setIsFullClipStudioOpen(false);
+          setGalleryTab('fullclip');
+          setIsGalleryOpen(true);
+        }}
       />
     </div>
   );

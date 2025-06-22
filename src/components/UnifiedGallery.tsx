@@ -1,13 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Play, Download, Trash2, Calendar, Clock, Code, X, Save, AlertCircle, FileAudio, Mic, Loader2, Users, Edit3, Captions, Sparkles, CheckCircle, Share2, ExternalLink, Upload, Image as ImageIcon } from 'lucide-react';
-import { dbManager, VideoRecord, FullClipVideoRecord, ShortsVideoRecord } from '../utils/database';
-import AudioStudio from './AudioStudio';
-import ShortsStudio from './ShortsStudio';
+import { Play, Download, Trash2, Calendar, Clock, Code, X, Save, AlertCircle, FileAudio, Mic, Loader2, Edit3, Captions, CheckCircle, Share2, ExternalLink } from 'lucide-react';
+import { dbManager, VideoRecord, FullClipVideoRecord } from '../utils/database';
+import FullClipStudio from './FullClipStudio';
 
 interface UnifiedGalleryProps {
   isOpen: boolean;
   onClose: () => void;
-  initialTab?: 'videos' | 'fullclip' | 'shorts';
+  initialTab?: 'videos' | 'fullclip';
   pendingVideo?: {
     blob: Blob;
     filename: string;
@@ -19,9 +18,9 @@ interface UnifiedGalleryProps {
   onPendingVideoSaved?: () => void;
 }
 
-type GalleryTab = 'videos' | 'fullclip' | 'shorts';
+type GalleryTab = 'videos' | 'fullclip';
 
-// Social Media Icons (using Lucide icons styled to match platforms)
+// Social Media Icons
 const XIcon: React.FC<{ className?: string }> = ({ className }) => (
   <svg className={className} viewBox="0 0 24 24" fill="currentColor">
     <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
@@ -46,12 +45,12 @@ const YouTubeIcon: React.FC<{ className?: string }> = ({ className }) => (
   </svg>
 );
 
-// Custom Success Modal Component
+// Success Modal Component
 const SuccessModal: React.FC<{
   isOpen: boolean;
   onClose: () => void;
   filename: string;
-  type: 'video' | 'fullclip' | 'shorts';
+  type: 'video' | 'fullclip';
 }> = ({ isOpen, onClose, filename, type }) => {
   if (!isOpen) return null;
 
@@ -67,16 +66,9 @@ const SuccessModal: React.FC<{
       case 'fullclip':
         return {
           title: '🎵 FullClip Created!',
-          description: 'Your video with AI-generated audio and captions has been saved.',
+          description: 'Your complete social media video has been saved with all features.',
           icon: <FileAudio className="w-12 h-12 text-black" />,
           action: 'FullClip Gallery'
-        };
-      case 'shorts':
-        return {
-          title: '🐧 Shorts Video Created!',
-          description: 'Your video with penguin avatar, audio, and captions is ready.',
-          icon: <Users className="w-12 h-12 text-black" />,
-          action: 'Shorts Gallery'
         };
     }
   };
@@ -86,7 +78,6 @@ const SuccessModal: React.FC<{
   return (
     <div className="fixed inset-0 bg-black/95 backdrop-blur-sm z-[60] flex items-center justify-center p-6">
       <div className="bg-black border-2 border-white rounded-xl p-8 max-w-md text-center relative">
-        {/* Animated Success Icon */}
         <div className="mb-6">
           <div className="w-20 h-20 mx-auto bg-white rounded-full flex items-center justify-center animate-pulse">
             {content.icon}
@@ -128,288 +119,6 @@ const SuccessModal: React.FC<{
   );
 };
 
-// FIXED: Thumbnail Modal Component with proper video rendering
-const ThumbnailModal: React.FC<{
-  isOpen: boolean;
-  onClose: () => void;
-  video: ShortsVideoRecord;
-  onDownloadWithThumbnail: (thumbnailBlob: Blob, thumbnailType: 'image' | 'text', thumbnailData: string) => void;
-}> = ({ isOpen, onClose, video, onDownloadWithThumbnail }) => {
-  const [thumbnailType, setThumbnailType] = useState<'image' | 'text'>('text');
-  const [thumbnailText, setThumbnailText] = useState('');
-  const [thumbnailImage, setThumbnailImage] = useState<File | null>(null);
-  const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
-
-  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file && file.type.startsWith('image/')) {
-      setThumbnailImage(file);
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setThumbnailPreview(e.target?.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const generateThumbnailBlob = async (): Promise<Blob> => {
-    return new Promise((resolve) => {
-      const canvas = document.createElement('canvas');
-      canvas.width = 720;
-      canvas.height = 1280;
-      const ctx = canvas.getContext('2d')!;
-
-      if (thumbnailType === 'text' && thumbnailText.trim()) {
-        // Create text thumbnail
-        ctx.fillStyle = '#000000';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        
-        ctx.fillStyle = '#FFFFFF';
-        ctx.font = 'bold 48px Arial';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        
-        // Word wrap for long text
-        const words = thumbnailText.split(' ');
-        const lines: string[] = [];
-        let currentLine = '';
-        
-        for (const word of words) {
-          const testLine = currentLine + (currentLine ? ' ' : '') + word;
-          const metrics = ctx.measureText(testLine);
-          
-          if (metrics.width > canvas.width - 80 && currentLine) {
-            lines.push(currentLine);
-            currentLine = word;
-          } else {
-            currentLine = testLine;
-          }
-        }
-        if (currentLine) lines.push(currentLine);
-        
-        const lineHeight = 60;
-        const startY = canvas.height / 2 - (lines.length - 1) * lineHeight / 2;
-        
-        lines.forEach((line, index) => {
-          ctx.fillText(line, canvas.width / 2, startY + index * lineHeight);
-        });
-        
-        canvas.toBlob(resolve, 'image/png');
-      } else if (thumbnailType === 'image' && thumbnailImage) {
-        // Create image thumbnail
-        const img = new Image();
-        img.onload = () => {
-          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-          canvas.toBlob(resolve, 'image/png');
-        };
-        img.src = thumbnailPreview!;
-      } else {
-        // Fallback: create a simple thumbnail
-        ctx.fillStyle = '#000000';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = '#FFFFFF';
-        ctx.font = 'bold 36px Arial';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('CodeStream', canvas.width / 2, canvas.height / 2);
-        canvas.toBlob(resolve, 'image/png');
-      }
-    });
-  };
-
-  const handleDownload = async () => {
-    if (thumbnailType === 'text' && !thumbnailText.trim()) {
-      alert('Please enter thumbnail text');
-      return;
-    }
-    if (thumbnailType === 'image' && !thumbnailImage) {
-      alert('Please select a thumbnail image');
-      return;
-    }
-
-    setIsProcessing(true);
-    try {
-      const thumbnailBlob = await generateThumbnailBlob();
-      const thumbnailData = thumbnailType === 'text' ? thumbnailText : (thumbnailPreview || '');
-      
-      await onDownloadWithThumbnail(thumbnailBlob, thumbnailType, thumbnailData);
-    } catch (error) {
-      console.error('Failed to process thumbnail:', error);
-      alert('Failed to process thumbnail');
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black/95 backdrop-blur-sm z-[60] flex items-center justify-center p-6">
-      <div className="bg-black border-2 border-white rounded-xl p-8 max-w-md w-full">
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-2xl font-bold text-white flex items-center gap-2">
-            <ImageIcon className="w-6 h-6" />
-            Add Thumbnail
-          </h3>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-white hover:text-black rounded transition-colors border-2 border-white text-white"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <div className="space-y-6">
-          {/* Thumbnail Type Selection */}
-          <div>
-            <label className="block text-white font-bold mb-3">Thumbnail Type</label>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setThumbnailType('text')}
-                className={`flex-1 py-3 px-4 rounded-lg font-bold transition-colors border-2 ${
-                  thumbnailType === 'text'
-                    ? 'bg-white text-black border-white'
-                    : 'bg-black text-white border-gray-600 hover:border-white'
-                }`}
-              >
-                Text
-              </button>
-              <button
-                onClick={() => setThumbnailType('image')}
-                className={`flex-1 py-3 px-4 rounded-lg font-bold transition-colors border-2 ${
-                  thumbnailType === 'image'
-                    ? 'bg-white text-black border-white'
-                    : 'bg-black text-white border-gray-600 hover:border-white'
-                }`}
-              >
-                Image
-              </button>
-            </div>
-          </div>
-
-          {/* Text Input */}
-          {thumbnailType === 'text' && (
-            <div>
-              <label className="block text-white font-bold mb-2">Thumbnail Text</label>
-              <textarea
-                value={thumbnailText}
-                onChange={(e) => setThumbnailText(e.target.value)}
-                placeholder="Enter your thumbnail text..."
-                className="w-full h-24 p-3 bg-black border-2 border-white text-white rounded resize-none"
-                maxLength={100}
-              />
-              <p className="text-gray-400 text-sm mt-1">
-                {thumbnailText.length}/100 characters
-              </p>
-            </div>
-          )}
-
-          {/* Image Upload */}
-          {thumbnailType === 'image' && (
-            <div>
-              <label className="block text-white font-bold mb-2">Thumbnail Image</label>
-              <div className="space-y-3">
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-black border-2 border-white text-white hover:bg-white hover:text-black rounded-lg font-bold transition-colors"
-                >
-                  <Upload className="w-5 h-5" />
-                  Choose Image
-                </button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageUpload}
-                  className="hidden"
-                />
-                {thumbnailPreview && (
-                  <div className="border-2 border-white rounded-lg p-2">
-                    <img
-                      src={thumbnailPreview}
-                      alt="Thumbnail preview"
-                      className="w-full h-32 object-cover rounded"
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Preview */}
-          <div>
-            <label className="block text-white font-bold mb-2">Preview</label>
-            <div className="bg-gray-800 border-2 border-white rounded-lg p-4 text-center">
-              {thumbnailType === 'text' && thumbnailText.trim() ? (
-                <div className="text-white font-bold text-lg">
-                  {thumbnailText}
-                </div>
-              ) : thumbnailType === 'image' && thumbnailPreview ? (
-                <img
-                  src={thumbnailPreview}
-                  alt="Preview"
-                  className="w-full h-24 object-cover rounded"
-                />
-              ) : (
-                <div className="text-gray-400 py-8">
-                  {thumbnailType === 'text' ? 'Enter text to see preview' : 'Select image to see preview'}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Avatar Preservation Notice */}
-          <div className="bg-black border-2 border-white rounded-lg p-4">
-            <h4 className="text-white font-bold mb-2 flex items-center gap-2">
-              <Users className="w-5 h-5" />
-              What's Included
-            </h4>
-            <div className="space-y-1 text-sm text-gray-300">
-              <div className="flex items-center gap-2">
-                <CheckCircle className="w-4 h-4 text-green-400" />
-                <span>✅ 1-second thumbnail intro</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <CheckCircle className="w-4 h-4 text-green-400" />
-                <span>✅ Complete Shorts video with avatar</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <CheckCircle className="w-4 h-4 text-green-400" />
-                <span>✅ Audio narration preserved</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <CheckCircle className="w-4 h-4 text-green-400" />
-                <span>✅ Embedded captions maintained</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Download Button */}
-          <button
-            onClick={handleDownload}
-            disabled={isProcessing || (thumbnailType === 'text' && !thumbnailText.trim()) || (thumbnailType === 'image' && !thumbnailImage)}
-            className="w-full flex items-center justify-center gap-2 py-4 px-6 bg-white hover:bg-gray-200 disabled:bg-gray-600 text-black font-bold rounded-lg transition-colors border-2 border-white"
-          >
-            {isProcessing ? (
-              <>
-                <Loader2 className="w-5 h-5 animate-spin" />
-                Processing...
-              </>
-            ) : (
-              <>
-                <Download className="w-5 h-5" />
-                Download with Thumbnail
-              </>
-            )}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 const UnifiedGallery: React.FC<UnifiedGalleryProps> = ({
   isOpen,
   onClose,
@@ -420,16 +129,13 @@ const UnifiedGallery: React.FC<UnifiedGalleryProps> = ({
   const [activeTab, setActiveTab] = useState<GalleryTab>(initialTab);
   const [videos, setVideos] = useState<VideoRecord[]>([]);
   const [fullClipVideos, setFullClipVideos] = useState<FullClipVideoRecord[]>([]);
-  const [shortsVideos, setShortsVideos] = useState<ShortsVideoRecord[]>([]);
   const [loading, setLoading] = useState(false);
-  const [selectedVideo, setSelectedVideo] = useState<VideoRecord | FullClipVideoRecord | ShortsVideoRecord | null>(null);
+  const [selectedVideo, setSelectedVideo] = useState<VideoRecord | FullClipVideoRecord | null>(null);
   const [savingPending, setSavingPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dbStats, setDbStats] = useState<{ videoCount: number; fullClipCount: number; shortsCount: number; dbSize: number } | null>(null);
-  const [isAudioStudioOpen, setIsAudioStudioOpen] = useState(false);
-  const [isShortsStudioOpen, setIsShortsStudioOpen] = useState(false);
-  const [videoForAudio, setVideoForAudio] = useState<VideoRecord | null>(null);
-  const [videoForShorts, setVideoForShorts] = useState<FullClipVideoRecord | null>(null);
+  const [isFullClipStudioOpen, setIsFullClipStudioOpen] = useState(false);
+  const [videoForFullClip, setVideoForFullClip] = useState<VideoRecord | null>(null);
   const [deletingVideoId, setDeletingVideoId] = useState<number | null>(null);
   const [showCaptions, setShowCaptions] = useState(true);
   
@@ -441,13 +147,8 @@ const UnifiedGallery: React.FC<UnifiedGalleryProps> = ({
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successModalData, setSuccessModalData] = useState<{
     filename: string;
-    type: 'video' | 'fullclip' | 'shorts';
+    type: 'video' | 'fullclip';
   }>({ filename: '', type: 'video' });
-
-  // FIXED: Thumbnail modal state
-  const [isThumbnailModalOpen, setIsThumbnailModalOpen] = useState(false);
-  const [videoForThumbnail, setVideoForThumbnail] = useState<ShortsVideoRecord | null>(null);
-  const [isProcessingThumbnail, setIsProcessingThumbnail] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -459,7 +160,6 @@ const UnifiedGallery: React.FC<UnifiedGalleryProps> = ({
     setActiveTab(initialTab);
   }, [initialTab]);
 
-  // Initialize custom filename when pending video changes
   useEffect(() => {
     if (pendingVideo) {
       const baseName = pendingVideo.originalFilename.replace(/\.[^/.]+$/, '');
@@ -472,16 +172,14 @@ const UnifiedGallery: React.FC<UnifiedGalleryProps> = ({
     setLoading(true);
     setError(null);
     try {
-      const [videosData, fullClipData, shortsData, stats] = await Promise.all([
+      const [videosData, fullClipData, stats] = await Promise.all([
         dbManager.getAllVideos(),
         dbManager.getAllFullClipVideos(),
-        dbManager.getAllShortsVideos(),
         dbManager.getStats()
       ]);
       
       setVideos(videosData);
       setFullClipVideos(fullClipData);
-      setShortsVideos(shortsData);
       setDbStats(stats);
     } catch (error) {
       console.error('Failed to load gallery data:', error);
@@ -502,37 +200,26 @@ const UnifiedGallery: React.FC<UnifiedGalleryProps> = ({
         throw new Error('Invalid video blob - size is 0');
       }
 
-      // FIXED: Properly handle custom filename for display
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const cleanCustomName = customFilename.trim();
       const displayName = cleanCustomName || pendingVideo.originalFilename.replace(/\.[^/.]+$/, '');
       const technicalFilename = `${displayName}-${timestamp}.mp4`;
 
-      console.log('Saving video with proper naming:', {
-        customFilename: cleanCustomName,
-        displayName,
-        technicalFilename,
-        originalFilename: pendingVideo.originalFilename
-      });
-
       const videoId = await dbManager.saveVideo(
-        technicalFilename, // Technical filename for download
-        pendingVideo.originalFilename, // Original file reference
+        technicalFilename,
+        pendingVideo.originalFilename,
         pendingVideo.language,
         pendingVideo.duration,
         pendingVideo.blob,
         pendingVideo.content,
-        displayName // FIXED: This is what shows in the gallery
+        displayName
       );
-      
-      console.log('Video saved successfully with ID:', videoId, 'display name:', displayName);
       
       await loadAllData();
       onPendingVideoSaved?.();
       
-      // Show custom success modal with the display name
       setSuccessModalData({
-        filename: displayName, // Show the user-friendly name in success modal
+        filename: displayName,
         type: 'video'
       });
       setShowSuccessModal(true);
@@ -546,7 +233,7 @@ const UnifiedGallery: React.FC<UnifiedGalleryProps> = ({
     }
   };
 
-  const handleDownloadVideo = async (video: VideoRecord | FullClipVideoRecord | ShortsVideoRecord) => {
+  const handleDownloadVideo = async (video: VideoRecord | FullClipVideoRecord) => {
     try {
       const blob = new Blob([video.video_blob], { type: 'video/mp4' });
       
@@ -558,7 +245,6 @@ const UnifiedGallery: React.FC<UnifiedGalleryProps> = ({
       const a = document.createElement('a');
       a.href = url;
       
-      // Use the technical filename for download (which includes timestamp)
       let filename = video.filename;
       if (!filename.toLowerCase().endsWith('.mp4')) {
         filename = filename.replace(/\.[^/.]+$/, '') + '.mp4';
@@ -578,179 +264,8 @@ const UnifiedGallery: React.FC<UnifiedGalleryProps> = ({
     }
   };
 
-  // FIXED: Completely rewritten thumbnail download function
-  const handleDownloadWithThumbnail = async (video: ShortsVideoRecord, thumbnailBlob: Blob, thumbnailType: 'image' | 'text', thumbnailData: string) => {
-    setIsProcessingThumbnail(true);
-    
-    try {
-      console.log('🎬 Starting thumbnail video creation...');
-      
-      // Create canvas for final video
-      const canvas = document.createElement('canvas');
-      canvas.width = 720;
-      canvas.height = 1280;
-      const ctx = canvas.getContext('2d')!;
-
-      // Load thumbnail image
-      const thumbnailImage = new Image();
-      await new Promise((resolve, reject) => {
-        thumbnailImage.onload = resolve;
-        thumbnailImage.onerror = reject;
-        thumbnailImage.src = URL.createObjectURL(thumbnailBlob);
-      });
-      console.log('✅ Thumbnail image loaded');
-
-      // Create video element for the Shorts video (which already has avatar, audio, captions)
-      const videoElement = document.createElement('video');
-      videoElement.src = URL.createObjectURL(new Blob([video.video_blob], { type: 'video/mp4' }));
-      videoElement.muted = false; // Keep audio
-      videoElement.crossOrigin = 'anonymous';
-      
-      await new Promise((resolve, reject) => {
-        videoElement.onloadedmetadata = resolve;
-        videoElement.onerror = reject;
-        videoElement.load();
-      });
-      console.log('✅ Shorts video loaded with duration:', videoElement.duration);
-
-      // Set up recording
-      const canvasStream = canvas.captureStream(30);
-      
-      // FIXED: Proper audio handling - get audio from the video element
-      let finalStream: MediaStream;
-      
-      try {
-        // Create audio context to capture video audio
-        const audioContext = new AudioContext();
-        const audioSource = audioContext.createMediaElementSource(videoElement);
-        const audioDestination = audioContext.createMediaStreamDestination();
-        
-        // Connect audio
-        audioSource.connect(audioDestination);
-        
-        // Combine canvas video with video audio
-        finalStream = new MediaStream([
-          ...canvasStream.getVideoTracks(),
-          ...audioDestination.stream.getAudioTracks()
-        ]);
-        
-        console.log('✅ Audio stream connected from Shorts video');
-      } catch (audioError) {
-        console.warn('Audio connection failed, using video stream directly:', audioError);
-        finalStream = canvasStream;
-      }
-
-      // Set up MediaRecorder
-      let mimeType = 'video/mp4';
-      if (MediaRecorder.isTypeSupported('video/mp4;codecs=avc1.42E01E')) {
-        mimeType = 'video/mp4;codecs=avc1.42E01E';
-      }
-
-      const mediaRecorder = new MediaRecorder(finalStream, {
-        mimeType: mimeType,
-        videoBitsPerSecond: 2500000,
-        audioBitsPerSecond: 128000
-      });
-
-      const chunks: Blob[] = [];
-      
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          chunks.push(event.data);
-        }
-      };
-
-      mediaRecorder.onstop = () => {
-        console.log('🎬 Recording complete, creating final video...');
-        
-        const finalBlob = new Blob(chunks, { type: 'video/mp4' });
-        
-        // Download the video
-        const url = URL.createObjectURL(finalBlob);
-        const a = document.createElement('a');
-        a.href = url;
-        
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const displayName = getDisplayName(video);
-        a.download = `${displayName}-with-thumbnail-${timestamp}.mp4`;
-        
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
-        
-        console.log('✅ Video with thumbnail downloaded successfully');
-        setIsThumbnailModalOpen(false);
-      };
-
-      // Start recording
-      console.log('🎬 Starting recording...');
-      mediaRecorder.start(100);
-      
-      // Timing constants
-      const thumbnailDuration = 1000; // 1 second in milliseconds
-      const totalDuration = (thumbnailDuration + videoElement.duration * 1000);
-      
-      const startTime = Date.now();
-      
-      // FIXED: Simplified render loop that properly handles both phases
-      const renderFrame = () => {
-        const elapsed = Date.now() - startTime;
-        
-        // Clear canvas
-        ctx.fillStyle = '#000000';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        
-        if (elapsed < thumbnailDuration) {
-          // PHASE 1: Show thumbnail for first second
-          ctx.drawImage(thumbnailImage, 0, 0, canvas.width, canvas.height);
-          console.log('📸 Rendering thumbnail phase');
-        } else {
-          // PHASE 2: Show the Shorts video (which already contains avatar, captions, audio)
-          const videoTime = (elapsed - thumbnailDuration) / 1000;
-          
-          // Update video time
-          if (Math.abs(videoElement.currentTime - videoTime) > 0.1) {
-            videoElement.currentTime = videoTime;
-          }
-          
-          // Draw the Shorts video frame (this already includes the avatar!)
-          if (videoElement.readyState >= 2) {
-            ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
-          }
-          
-          console.log('🎬 Rendering video phase, time:', videoTime.toFixed(2));
-        }
-        
-        // Check if we're done
-        if (elapsed >= totalDuration) {
-          console.log('🏁 Rendering complete, stopping recording...');
-          mediaRecorder.stop();
-          videoElement.pause();
-          return;
-        }
-        
-        requestAnimationFrame(renderFrame);
-      };
-
-      // Start video playback (for audio)
-      videoElement.currentTime = 0;
-      await videoElement.play();
-      
-      // Start render loop
-      renderFrame();
-      
-    } catch (error) {
-      console.error('❌ Failed to create video with thumbnail:', error);
-      alert(`Failed to create video with thumbnail: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    } finally {
-      setIsProcessingThumbnail(false);
-    }
-  };
-
-  // NEW: Social media sharing functions
-  const handleShareToX = async (video: VideoRecord | FullClipVideoRecord | ShortsVideoRecord) => {
+  // Social media sharing functions
+  const handleShareToX = async (video: VideoRecord | FullClipVideoRecord) => {
     try {
       const displayName = getDisplayName(video);
       const text = `Check out my code streaming video: ${displayName} 🎬\n\nCreated with CodeStream - turning code into engaging vertical videos!\n\n#CodeStream #Programming #${video.file_language}`;
@@ -762,9 +277,8 @@ const UnifiedGallery: React.FC<UnifiedGalleryProps> = ({
     }
   };
 
-  const handleShareToTikTok = async (video: VideoRecord | FullClipVideoRecord | ShortsVideoRecord) => {
+  const handleShareToTikTok = async (video: VideoRecord | FullClipVideoRecord) => {
     try {
-      // TikTok doesn't have a direct web sharing API, so we'll copy sharing text to clipboard
       const displayName = getDisplayName(video);
       const text = `🎬 New code video: ${displayName}\n\nMade with CodeStream - AI-powered code videos with narration!\n\n#CodeTok #Programming #${video.file_language} #CodeStream #TechTok`;
       
@@ -776,9 +290,8 @@ const UnifiedGallery: React.FC<UnifiedGalleryProps> = ({
     }
   };
 
-  const handleShareToInstagram = async (video: VideoRecord | FullClipVideoRecord | ShortsVideoRecord) => {
+  const handleShareToInstagram = async (video: VideoRecord | FullClipVideoRecord) => {
     try {
-      // Instagram doesn't have direct web sharing, so we'll provide instructions
       const displayName = getDisplayName(video);
       const text = `🎥 ${displayName}\n\nCreated with CodeStream - AI narration meets code streaming!\n\n#CodeStream #Programming #${video.file_language} #TechReels #CodingLife`;
       
@@ -790,7 +303,7 @@ const UnifiedGallery: React.FC<UnifiedGalleryProps> = ({
     }
   };
 
-  const handleShareToYouTube = async (video: VideoRecord | FullClipVideoRecord | ShortsVideoRecord) => {
+  const handleShareToYouTube = async (video: VideoRecord | FullClipVideoRecord) => {
     try {
       const displayName = getDisplayName(video);
       const description = `${displayName}
@@ -811,7 +324,6 @@ Made with CodeStream: https://codestream.app`;
 
       await navigator.clipboard.writeText(description);
       
-      // Open YouTube upload page
       window.open('https://studio.youtube.com/channel/UC/videos/upload?d=ud', '_blank');
       
       alert('🎬 YouTube description copied to clipboard!\n\nYouTube Studio is now opening. Upload your MP4 file and paste the description!');
@@ -834,9 +346,6 @@ Made with CodeStream: https://codestream.app`;
         case 'fullclip':
           success = await dbManager.deleteFullClipVideo(id);
           break;
-        case 'shorts':
-          success = await dbManager.deleteShortsVideo(id);
-          break;
       }
       
       if (success) {
@@ -855,49 +364,23 @@ Made with CodeStream: https://codestream.app`;
     }
   };
 
-  const handlePlayVideo = (video: VideoRecord | FullClipVideoRecord | ShortsVideoRecord) => {
+  const handlePlayVideo = (video: VideoRecord | FullClipVideoRecord) => {
     setSelectedVideo(video);
   };
 
-  const handleAddAudio = (video: VideoRecord) => {
-    setVideoForAudio(video);
-    setIsAudioStudioOpen(true);
+  const handleCreateFullClip = (video: VideoRecord) => {
+    setVideoForFullClip(video);
+    setIsFullClipStudioOpen(true);
   };
 
-  const handleSendToShorts = (video: FullClipVideoRecord) => {
-    setVideoForShorts(video);
-    setIsShortsStudioOpen(true);
+  const handleFullClipStudioClose = () => {
+    setIsFullClipStudioOpen(false);
+    setVideoForFullClip(null);
   };
 
-  // FIXED: New thumbnail handler
-  const handleAddThumbnail = (video: ShortsVideoRecord) => {
-    setVideoForThumbnail(video);
-    setIsThumbnailModalOpen(true);
-  };
-
-  const handleAudioStudioClose = () => {
-    setIsAudioStudioOpen(false);
-    setVideoForAudio(null);
-  };
-
-  const handleShortsStudioClose = () => {
-    setIsShortsStudioOpen(false);
-    setVideoForShorts(null);
-  };
-
-  const handleThumbnailModalClose = () => {
-    setIsThumbnailModalOpen(false);
-    setVideoForThumbnail(null);
-  };
-
-  const handleAudioVideoSaved = async () => {
+  const handleFullClipVideoSaved = async () => {
     await loadAllData();
-    setActiveTab('fullclip'); // Switch to FullClip tab
-  };
-
-  const handleShortsVideoSaved = async () => {
-    await loadAllData();
-    setActiveTab('shorts'); // Switch to Shorts tab
+    setActiveTab('fullclip');
   };
 
   const handleSuccessModalClose = () => {
@@ -928,14 +411,12 @@ Made with CodeStream: https://codestream.app`;
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  // FIXED: Helper function to get display name for videos
-  const getDisplayName = (video: VideoRecord | FullClipVideoRecord | ShortsVideoRecord): string => {
-    // Use display_name if available, otherwise fall back to original_filename
+  const getDisplayName = (video: VideoRecord | FullClipVideoRecord): string => {
     return video.display_name || video.original_filename;
   };
 
   const renderVideoList = () => {
-    let currentVideos: (VideoRecord | FullClipVideoRecord | ShortsVideoRecord)[] = [];
+    let currentVideos: (VideoRecord | FullClipVideoRecord)[] = [];
     let emptyMessage = '';
     let emptyIcon = <Play className="w-16 h-16 mx-auto mb-4 opacity-50" />;
 
@@ -950,11 +431,6 @@ Made with CodeStream: https://codestream.app`;
         emptyMessage = 'No FullClip videos yet';
         emptyIcon = <FileAudio className="w-16 h-16 mx-auto mb-4 opacity-50" />;
         break;
-      case 'shorts':
-        currentVideos = shortsVideos;
-        emptyMessage = 'No Shorts videos yet';
-        emptyIcon = <Users className="w-16 h-16 mx-auto mb-4 opacity-50" />;
-        break;
     }
 
     if (loading) {
@@ -968,8 +444,7 @@ Made with CodeStream: https://codestream.app`;
           <p className="text-xl font-bold">{emptyMessage}</p>
           <p className="text-lg mt-2">
             {activeTab === 'videos' && 'Record some code streams to get started'}
-            {activeTab === 'fullclip' && 'Create videos with audio in the Audio Studio'}
-            {activeTab === 'shorts' && 'Create videos with penguin avatars in the Shorts Studio'}
+            {activeTab === 'fullclip' && 'Create complete videos in the FullClip Studio'}
           </p>
         </div>
       );
@@ -986,7 +461,6 @@ Made with CodeStream: https://codestream.app`;
                         : 'border-gray-600 hover:border-white text-white'}`}
             onClick={() => handlePlayVideo(video)}
           >
-            {/* Deleting overlay */}
             {deletingVideoId === video.id && (
               <div className="absolute inset-0 bg-black/80 backdrop-blur-sm rounded-lg flex items-center justify-center">
                 <div className="flex items-center gap-3 text-white">
@@ -997,7 +471,6 @@ Made with CodeStream: https://codestream.app`;
             )}
 
             <div className="flex items-start justify-between mb-3">
-              {/* FIXED: Show display name instead of original filename */}
               <h4 className="font-bold text-lg truncate">{getDisplayName(video)}</h4>
               <div className="flex gap-2 ml-4">
                 {/* Tab-specific action buttons */}
@@ -1005,7 +478,7 @@ Made with CodeStream: https://codestream.app`;
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleAddAudio(video as VideoRecord);
+                      handleCreateFullClip(video as VideoRecord);
                     }}
                     disabled={deletingVideoId === video.id}
                     className={`p-2 rounded transition-colors border-2 ${
@@ -1013,48 +486,15 @@ Made with CodeStream: https://codestream.app`;
                         ? 'border-black text-black hover:bg-black hover:text-white' 
                         : 'border-white text-white hover:bg-white hover:text-black'
                     } disabled:opacity-50 disabled:cursor-not-allowed`}
-                    title="Add Audio & Captions"
+                    title="Create FullClip"
                   >
                     <Mic className="w-5 h-5" />
                   </button>
                 )}
                 
+                {/* Social Media Sharing Buttons for FullClip */}
                 {activeTab === 'fullclip' && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleSendToShorts(video as FullClipVideoRecord);
-                    }}
-                    disabled={deletingVideoId === video.id}
-                    className={`p-2 rounded transition-colors border-2 ${
-                      selectedVideo?.id === video.id 
-                        ? 'border-black text-black hover:bg-black hover:text-white' 
-                        : 'border-white text-white hover:bg-white hover:text-black'
-                    } disabled:opacity-50 disabled:cursor-not-allowed`}
-                    title="Send to Shorts Gallery"
-                  >
-                    <Users className="w-5 h-5" />
-                  </button>
-                )}
-
-                {/* FIXED: Shorts buttons with thumbnail option */}
-                {activeTab === 'shorts' && (
                   <>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleAddThumbnail(video as ShortsVideoRecord);
-                      }}
-                      disabled={deletingVideoId === video.id}
-                      className={`p-2 rounded transition-colors border-2 ${
-                        selectedVideo?.id === video.id 
-                          ? 'border-black text-black hover:bg-black hover:text-white' 
-                          : 'border-white text-white hover:bg-white hover:text-black'
-                      } disabled:opacity-50 disabled:cursor-not-allowed`}
-                      title="Add Thumbnail"
-                    >
-                      <ImageIcon className="w-5 h-5" />
-                    </button>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -1160,7 +600,6 @@ Made with CodeStream: https://codestream.app`;
                 <span>{formatDuration(video.duration)}</span>
               </div>
               
-              {/* Tab-specific indicators */}
               {activeTab === 'fullclip' && (
                 <>
                   <div className="flex items-center gap-2">
@@ -1170,15 +609,6 @@ Made with CodeStream: https://codestream.app`;
                   <div className="flex items-center gap-2">
                     <Captions className="w-4 h-4" />
                     <span>{JSON.parse((video as FullClipVideoRecord).captions || '[]').length} captions</span>
-                  </div>
-                </>
-              )}
-              
-              {activeTab === 'shorts' && (
-                <>
-                  <div className="flex items-center gap-2">
-                    <Users className="w-4 h-4" />
-                    <span>{(video as ShortsVideoRecord).avatar_type}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Share2 className="w-4 h-4" />
@@ -1197,21 +627,9 @@ Made with CodeStream: https://codestream.app`;
               <span>{formatDate(video.created_at)}</span>
             </div>
 
-            {/* Tab-specific preview content */}
             {activeTab === 'fullclip' && (video as FullClipVideoRecord).script && (
               <div className="mt-3 p-3 bg-gray-800 rounded text-xs">
                 <p className="truncate">{(video as FullClipVideoRecord).script.substring(0, 100)}...</p>
-              </div>
-            )}
-            
-            {activeTab === 'shorts' && (
-              <div className="mt-3 p-3 bg-gray-800 rounded text-xs">
-                <p className="text-gray-300">
-                  Avatar: {(video as ShortsVideoRecord).avatar_type} • Position: {(video as ShortsVideoRecord).avatar_position}
-                </p>
-                <p className="text-green-400 mt-1">
-                  ✨ Ready for X, TikTok, Instagram & YouTube
-                </p>
               </div>
             )}
           </div>
@@ -1226,7 +644,6 @@ Made with CodeStream: https://codestream.app`;
         <div className="text-center text-gray-400 flex flex-col items-center justify-center min-h-full">
           {activeTab === 'videos' && <Play className="w-20 h-20 mx-auto mb-6 opacity-50" />}
           {activeTab === 'fullclip' && <FileAudio className="w-20 h-20 mx-auto mb-6 opacity-50" />}
-          {activeTab === 'shorts' && <Users className="w-20 h-20 mx-auto mb-6 opacity-50" />}
           <p className="text-2xl font-bold">Select a video to preview</p>
           <p className="text-lg mt-2">Click on any video from the list to play it here</p>
         </div>
@@ -1249,19 +666,9 @@ Made with CodeStream: https://codestream.app`;
               setError('Failed to load video for playback');
             }}
           />
-          
-          {/* Caption overlay info for FullClip videos */}
-          {activeTab === 'fullclip' && showCaptions && (selectedVideo as FullClipVideoRecord).captions && (
-            <div className="absolute bottom-4 left-4 right-4 pointer-events-none">
-              <div className="bg-black/80 text-white p-2 rounded text-sm text-center">
-                <p>Captions are embedded in the video</p>
-              </div>
-            </div>
-          )}
         </div>
         
         <div className="mt-6 text-center">
-          {/* FIXED: Show display name in video player too */}
           <h4 className="font-bold text-xl text-white mb-3">{getDisplayName(selectedVideo)}</h4>
           <div className="flex justify-center gap-6 text-lg text-gray-400 font-medium mb-4">
             <span className="capitalize">{selectedVideo.file_language}</span>
@@ -1269,66 +676,22 @@ Made with CodeStream: https://codestream.app`;
             <span>{formatFileSize(selectedVideo.video_blob.length)}</span>
           </div>
           
-          {/* Tab-specific content */}
           {activeTab === 'fullclip' && (selectedVideo as FullClipVideoRecord).script && (
             <div className="bg-black border-2 border-white rounded-lg p-4 mb-4 text-left max-h-64 overflow-y-auto">
               <h5 className="text-white font-bold mb-2 sticky top-0 bg-black">Audio Script</h5>
               <p className="text-gray-300 text-sm leading-relaxed">{(selectedVideo as FullClipVideoRecord).script}</p>
             </div>
           )}
-
-          {activeTab === 'shorts' && (
-            <div className="bg-black border-2 border-white rounded-lg p-4 mb-4 text-left">
-              <h5 className="text-white font-bold mb-2">Avatar Details</h5>
-              <div className="space-y-2 text-sm text-gray-300">
-                <div className="flex justify-between">
-                  <span>Type:</span>
-                  <span className="capitalize">{(selectedVideo as ShortsVideoRecord).avatar_type}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Position:</span>
-                  <span className="capitalize">{(selectedVideo as ShortsVideoRecord).avatar_position}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Size:</span>
-                  <span>{(selectedVideo as ShortsVideoRecord).avatar_size}%</span>
-                </div>
-              </div>
-            </div>
-          )}
           
           <div className="flex gap-4 justify-center mb-4">
             {activeTab === 'videos' && (
               <button
-                onClick={() => handleAddAudio(selectedVideo as VideoRecord)}
+                onClick={() => handleCreateFullClip(selectedVideo as VideoRecord)}
                 className="bg-white hover:bg-gray-200 text-black px-6 py-3 rounded-lg font-bold 
                          transition-colors border-2 border-white flex items-center gap-2"
               >
                 <Mic className="w-5 h-5" />
-                Add Audio
-              </button>
-            )}
-            
-            {activeTab === 'fullclip' && (
-              <button
-                onClick={() => handleSendToShorts(selectedVideo as FullClipVideoRecord)}
-                className="bg-white hover:bg-gray-200 text-black px-6 py-3 rounded-lg font-bold 
-                         transition-colors border-2 border-white flex items-center gap-2"
-              >
-                <Users className="w-5 h-5" />
-                Send to Shorts Gallery
-              </button>
-            )}
-            
-            {/* FIXED: Shorts buttons with thumbnail option */}
-            {activeTab === 'shorts' && (
-              <button
-                onClick={() => handleAddThumbnail(selectedVideo as ShortsVideoRecord)}
-                className="bg-white hover:bg-gray-200 text-black px-6 py-3 rounded-lg font-bold 
-                         transition-colors border-2 border-white flex items-center gap-2"
-              >
-                <ImageIcon className="w-5 h-5" />
-                Add Thumbnail
+                Create FullClip
               </button>
             )}
             
@@ -1342,8 +705,8 @@ Made with CodeStream: https://codestream.app`;
             </button>
           </div>
 
-          {/* NEW: Social Media Sharing Section for Shorts */}
-          {activeTab === 'shorts' && (
+          {/* Social Media Sharing Section for FullClip */}
+          {activeTab === 'fullclip' && (
             <div className="bg-black border-2 border-white rounded-lg p-4">
               <h5 className="text-white font-bold mb-3 flex items-center gap-2">
                 <Share2 className="w-5 h-5" />
@@ -1406,7 +769,6 @@ Made with CodeStream: https://codestream.app`;
                 <div className="p-2 border-2 border-white rounded-lg">
                   {activeTab === 'videos' && <Play className="w-6 h-6 text-white" />}
                   {activeTab === 'fullclip' && <FileAudio className="w-6 h-6 text-white" />}
-                  {activeTab === 'shorts' && <Users className="w-6 h-6 text-white" />}
                 </div>
                 Gallery
               </h2>
@@ -1434,17 +796,6 @@ Made with CodeStream: https://codestream.app`;
                 >
                   <FileAudio className="w-4 h-4" />
                   FullClip ({fullClipVideos.length})
-                </button>
-                <button
-                  onClick={() => setActiveTab('shorts')}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold transition-colors border-2 ${
-                    activeTab === 'shorts'
-                      ? 'bg-white text-black border-white'
-                      : 'bg-black text-white border-gray-600 hover:border-white'
-                  }`}
-                >
-                  <Users className="w-4 h-4" />
-                  Shorts ({shortsVideos.length})
                 </button>
               </div>
               
@@ -1493,22 +844,6 @@ Made with CodeStream: https://codestream.app`;
             </div>
           )}
 
-          {/* Processing Overlay */}
-          {isProcessingThumbnail && (
-            <div className="mx-6 mt-4 bg-black border-2 border-white rounded-lg p-4 flex items-center gap-3">
-              <Loader2 className="w-6 h-6 text-white animate-spin flex-shrink-0" />
-              <span className="text-white font-medium">Creating video with thumbnail...</span>
-            </div>
-          )}
-
-          {/* Deleting Overlay */}
-          {deletingVideoId && (
-            <div className="mx-6 mt-4 bg-black border-2 border-white rounded-lg p-4 flex items-center gap-3">
-              <Loader2 className="w-6 h-6 text-white animate-spin flex-shrink-0" />
-              <span className="text-white font-medium">Deleting video...</span>
-            </div>
-          )}
-
           <div className="flex-1 flex overflow-hidden">
             {/* Video List */}
             <div className="w-1/2 border-r-2 border-white flex flex-col">
@@ -1516,7 +851,6 @@ Made with CodeStream: https://codestream.app`;
                 <h3 className="text-2xl font-bold text-white mb-6">
                   {activeTab === 'videos' && 'Basic Videos'}
                   {activeTab === 'fullclip' && 'Complete Videos'}
-                  {activeTab === 'shorts' && 'Social Media Ready'}
                 </h3>
                 
                 {/* Pending Video Save - Only show on videos tab */}
@@ -1535,7 +869,6 @@ Made with CodeStream: https://codestream.app`;
                       </button>
                     </div>
                     
-                    {/* File Rename Section */}
                     <div className="mb-4">
                       <label className="block text-white font-bold mb-2">Video Name</label>
                       <div className="flex gap-2">
@@ -1591,35 +924,15 @@ Made with CodeStream: https://codestream.app`;
         </div>
       </div>
 
-      {/* Audio Studio Modal */}
-      <AudioStudio
-        isOpen={isAudioStudioOpen}
-        onClose={handleAudioStudioClose}
-        selectedVideo={videoForAudio}
-        onAudioVideoSaved={handleAudioVideoSaved}
+      {/* FullClip Studio Modal */}
+      <FullClipStudio
+        isOpen={isFullClipStudioOpen}
+        onClose={handleFullClipStudioClose}
+        selectedVideo={videoForFullClip}
+        onVideoSaved={handleFullClipVideoSaved}
       />
 
-      {/* Shorts Studio Modal */}
-      <ShortsStudio
-        isOpen={isShortsStudioOpen}
-        onClose={handleShortsStudioClose}
-        selectedVideo={videoForShorts}
-        onShortsVideoSaved={handleShortsVideoSaved}
-      />
-
-      {/* FIXED: Thumbnail Modal */}
-      {videoForThumbnail && (
-        <ThumbnailModal
-          isOpen={isThumbnailModalOpen}
-          onClose={handleThumbnailModalClose}
-          video={videoForThumbnail}
-          onDownloadWithThumbnail={(thumbnailBlob, thumbnailType, thumbnailData) => 
-            handleDownloadWithThumbnail(videoForThumbnail, thumbnailBlob, thumbnailType, thumbnailData)
-          }
-        />
-      )}
-
-      {/* Custom Success Modal */}
+      {/* Success Modal */}
       <SuccessModal
         isOpen={showSuccessModal}
         onClose={handleSuccessModalClose}
