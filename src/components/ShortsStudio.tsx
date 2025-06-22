@@ -31,6 +31,12 @@ interface PenguinAvatar {
   imageUrl: string;
 }
 
+interface CaptionSegment {
+  start: number;
+  end: number;
+  text: string;
+}
+
 const ShortsStudio: React.FC<ShortsStudioProps> = ({
   isOpen,
   onClose,
@@ -114,7 +120,7 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
           'Authorization': `Bearer ${xaiApiKey}`
         },
         body: JSON.stringify({
-          model: 'grok-2-image',
+          model: 'grok-2-vision-fx',
           prompt: enhancedPrompt,
           n: 1,
           size: '512x512',
@@ -169,6 +175,71 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
     }
   };
 
+  const drawCaptions = (ctx: CanvasRenderingContext2D, currentTime: number, captions: CaptionSegment[], canvasWidth: number, canvasHeight: number) => {
+    // Find the active caption for the current time
+    const activeCaption = captions.find(caption => 
+      currentTime >= caption.start && currentTime <= caption.end
+    );
+
+    if (!activeCaption) return;
+
+    // Caption styling
+    const fontSize = Math.max(24, canvasWidth * 0.04);
+    const lineHeight = fontSize * 1.2;
+    const padding = 16;
+    const maxWidth = canvasWidth - (padding * 2);
+    
+    ctx.font = `bold ${fontSize}px Arial, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    // Split text into words and wrap lines
+    const words = activeCaption.text.split(' ');
+    const lines: string[] = [];
+    let currentLine = '';
+
+    for (const word of words) {
+      const testLine = currentLine ? `${currentLine} ${word}` : word;
+      const metrics = ctx.measureText(testLine);
+      
+      if (metrics.width > maxWidth && currentLine) {
+        lines.push(currentLine);
+        currentLine = word;
+      } else {
+        currentLine = testLine;
+      }
+    }
+    if (currentLine) {
+      lines.push(currentLine);
+    }
+
+    // Calculate total text height
+    const totalTextHeight = lines.length * lineHeight;
+    
+    // Position captions at the bottom center
+    const textY = canvasHeight - totalTextHeight - padding * 2;
+    
+    // Draw background for each line
+    lines.forEach((line, index) => {
+      const lineY = textY + (index * lineHeight);
+      const metrics = ctx.measureText(line);
+      const textWidth = metrics.width;
+      
+      // Draw semi-transparent background
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+      ctx.fillRect(
+        (canvasWidth - textWidth) / 2 - padding,
+        lineY - fontSize / 2 - padding / 2,
+        textWidth + padding * 2,
+        fontSize + padding
+      );
+      
+      // Draw white text
+      ctx.fillStyle = 'white';
+      ctx.fillText(line, canvasWidth / 2, lineY);
+    });
+  };
+
   const processVideoWithAvatar = async () => {
     if (!selectedVideo || !selectedAvatar) {
       alert('Please select a video and avatar first.');
@@ -181,13 +252,23 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
     try {
       console.log('Starting video processing with avatar...');
       
+      // Parse captions from the selected video
+      let captions: CaptionSegment[] = [];
+      try {
+        if (selectedVideo.captions) {
+          captions = JSON.parse(selectedVideo.captions);
+        }
+      } catch (error) {
+        console.warn('Failed to parse captions:', error);
+      }
+      
       // Create video element for the original video
       const videoBlob = new Blob([selectedVideo.video_blob], { type: 'video/mp4' });
       const videoUrl = URL.createObjectURL(videoBlob);
       
       const video = document.createElement('video');
       video.src = videoUrl;
-      video.muted = false; // Keep audio unmuted for processing
+      video.muted = true; // Mute the video to prevent audio playback during processing
       video.crossOrigin = 'anonymous';
       
       setProcessingProgress('Loading video...');
@@ -226,9 +307,8 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
       const audioSource = audioContext.createMediaElementSource(video);
       const audioDestination = audioContext.createMediaStreamDestination();
       
-      // Connect audio source to destination
+      // Connect audio source to destination (removed connection to speakers)
       audioSource.connect(audioDestination);
-      audioSource.connect(audioContext.destination); // Also connect to speakers for monitoring
 
       // Get video stream from canvas
       const videoStream = canvas.captureStream(30);
@@ -324,10 +404,11 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
       
       console.log('Playback started, beginning render loop...');
 
-      // Render loop with avatar overlay
+      // Render loop with avatar overlay and captions
       const renderFrame = () => {
         const elapsed = Date.now() - startTime;
         const progress = elapsed / maxDuration;
+        const currentVideoTime = video.currentTime;
         
         // Update progress
         const progressPercent = Math.round(progress * 100);
@@ -387,6 +468,11 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
         ctx.globalAlpha = 0.9;
         ctx.drawImage(avatarImg, avatarX, avatarY, avatarWidth, avatarHeight);
         ctx.globalAlpha = 1;
+
+        // Draw captions on top of everything (including avatar)
+        if (captions.length > 0) {
+          drawCaptions(ctx, currentVideoTime, captions, canvas.width, canvas.height);
+        }
 
         requestAnimationFrame(renderFrame);
       };
