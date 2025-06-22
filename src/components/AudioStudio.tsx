@@ -14,7 +14,8 @@ import {
   Clock,
   FileAudio,
   Captions,
-  Loader2
+  Loader2,
+  CheckCircle
 } from 'lucide-react';
 import { VideoRecord } from '../utils/database';
 import { dbManager } from '../utils/database';
@@ -39,6 +40,59 @@ interface CaptionSegment {
   startTime: number;
   endTime: number;
 }
+
+// FIXED: Custom Success Modal Component for FullClip
+const FullClipSuccessModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  filename: string;
+}> = ({ isOpen, onClose, filename }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/95 backdrop-blur-sm z-[60] flex items-center justify-center p-6">
+      <div className="bg-black border-2 border-white rounded-xl p-8 max-w-md text-center relative">
+        {/* Animated Success Icon */}
+        <div className="mb-6">
+          <div className="w-20 h-20 mx-auto bg-white rounded-full flex items-center justify-center animate-pulse">
+            <FileAudio className="w-12 h-12 text-black" />
+          </div>
+        </div>
+        
+        <h3 className="text-3xl font-bold text-white mb-4">🎵 FullClip Created!</h3>
+        
+        <div className="space-y-4 mb-6">
+          <p className="text-lg text-gray-300">
+            Your video with AI-generated audio and synchronized captions has been successfully created.
+          </p>
+          
+          <div className="bg-gray-800 border border-gray-600 rounded-lg p-4">
+            <p className="text-sm text-gray-400 mb-1">Saved as:</p>
+            <p className="text-white font-mono text-sm break-all">{filename}</p>
+          </div>
+          
+          <div className="flex items-center justify-center gap-2 text-green-400">
+            <CheckCircle className="w-5 h-5" />
+            <span className="font-bold">Audio & Captions Included</span>
+          </div>
+        </div>
+        
+        <button
+          onClick={onClose}
+          className="w-full bg-white hover:bg-gray-200 text-black px-6 py-3 rounded-lg font-bold 
+                   transition-colors border-2 border-white flex items-center justify-center gap-2"
+        >
+          <FileAudio className="w-5 h-5" />
+          Open FullClip Gallery
+        </button>
+        
+        <p className="text-gray-400 text-sm mt-4">
+          Your video is ready to download and share, or send to Shorts Gallery!
+        </p>
+      </div>
+    </div>
+  );
+};
 
 const AudioStudio: React.FC<AudioStudioProps> = ({
   isOpen,
@@ -66,6 +120,10 @@ const AudioStudio: React.FC<AudioStudioProps> = ({
   const [captionsEnabled, setCaptionsEnabled] = useState(true);
   const [captionTextColor, setCaptionTextColor] = useState('#FFFFFF');
   const [captionBackgroundColor, setCaptionBackgroundColor] = useState('#000000');
+  
+  // FIXED: Success modal state
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [savedVideoFilename, setSavedVideoFilename] = useState('');
   
   const audioRef = useRef<HTMLAudioElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -523,17 +581,9 @@ Write ONLY the script text in a natural, conversational tone that fits exactly $
           // Notify parent component
           onAudioVideoSaved();
           
-          // Close the studio
-          onClose();
-          
-          // Show success and redirect
-          alert('FullClip video saved successfully! Opening FullClip Gallery...');
-          
-          // Trigger opening of FullClip Gallery
-          setTimeout(() => {
-            // This will be handled by the parent component
-            window.dispatchEvent(new CustomEvent('openFullClipGallery'));
-          }, 500);
+          // FIXED: Show custom success modal instead of alert
+          setSavedVideoFilename(filename);
+          setShowSuccessModal(true);
           
         } catch (saveError) {
           console.error('Failed to save video:', saveError);
@@ -674,6 +724,16 @@ Write ONLY the script text in a natural, conversational tone that fits exactly $
     }
   };
 
+  const handleSuccessModalClose = () => {
+    setShowSuccessModal(false);
+    onClose();
+    
+    // Open FullClip Gallery
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('openFullClipGallery'));
+    }, 300);
+  };
+
   const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
@@ -689,372 +749,381 @@ Write ONLY the script text in a natural, conversational tone that fits exactly $
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-center justify-center p-6">
-      <div className="bg-black border-2 border-white rounded-xl w-full max-w-7xl h-[90vh] flex flex-col relative">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b-2 border-white">
-          <div className="flex items-center gap-6">
-            <h2 className="text-3xl font-bold text-white flex items-center gap-3">
-              <div className="p-2 border-2 border-white rounded-lg">
-                <FileAudio className="w-6 h-6 text-white" />
-              </div>
-              Audio Studio
-            </h2>
-            {selectedVideo && (
-              <div className="text-lg text-gray-400 font-medium">
-                {selectedVideo.original_filename} • {selectedVideo.duration}s
-              </div>
-            )}
-          </div>
-          <button
-            onClick={onClose}
-            className="p-3 hover:bg-white hover:text-black rounded-lg transition-colors border-2 border-white text-white"
-          >
-            <X className="w-6 h-6" />
-          </button>
-        </div>
-
-        {/* Processing Overlay */}
-        {(isProcessingVideo || processingProgress) && (
-          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm z-10 flex items-center justify-center">
-            <div className="bg-black border-2 border-white rounded-xl p-8 max-w-md text-center">
-              <div className="flex items-center justify-center gap-3 mb-4">
-                <Loader2 className="w-8 h-8 text-white animate-spin" />
-                <h3 className="text-2xl font-bold text-white">Processing Video</h3>
-              </div>
-              <p className="text-lg text-gray-300 mb-4">
-                {processingProgress || 'This will take a minute to combine video with audio...'}
-              </p>
-              <div className="w-full bg-gray-600 h-2 rounded mb-4">
-                <div className="bg-white h-2 rounded animate-pulse" style={{ width: '100%' }} />
-              </div>
-              <p className="text-sm text-gray-400">
-                Please don't close this window while processing
-              </p>
-            </div>
-          </div>
-        )}
-
-        <div className="flex-1 flex overflow-hidden">
-          {/* Left Panel - Configuration */}
-          <div className="w-1/2 border-r-2 border-white flex flex-col">
-            <div className="p-6 space-y-6 overflow-y-auto">
-              {/* API Keys */}
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-white font-bold mb-2">XAI API Key (for AI Script Generation)</label>
-                  <input
-                    type="password"
-                    value={xaiApiKey}
-                    onChange={(e) => setXaiApiKey(e.target.value)}
-                    placeholder="Enter your XAI API key"
-                    className="w-full p-3 bg-black border-2 border-white text-white rounded font-mono"
-                  />
-                  <p className="text-gray-400 text-sm mt-2">
-                    Get your API key from <a href="https://x.ai" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">x.ai</a>
-                  </p>
+    <>
+      <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-center justify-center p-6">
+        <div className="bg-black border-2 border-white rounded-xl w-full max-w-7xl h-[90vh] flex flex-col relative">
+          {/* Header */}
+          <div className="flex items-center justify-between p-6 border-b-2 border-white">
+            <div className="flex items-center gap-6">
+              <h2 className="text-3xl font-bold text-white flex items-center gap-3">
+                <div className="p-2 border-2 border-white rounded-lg">
+                  <FileAudio className="w-6 h-6 text-white" />
                 </div>
-
-                <div>
-                  <label className="block text-white font-bold mb-2">ElevenLabs API Key</label>
-                  <input
-                    type="password"
-                    value={elevenLabsApiKey}
-                    onChange={(e) => setElevenLabsApiKey(e.target.value)}
-                    placeholder="Enter your ElevenLabs API key"
-                    className="w-full p-3 bg-black border-2 border-white text-white rounded font-mono"
-                  />
-                  <p className="text-gray-400 text-sm mt-2">
-                    Get your API key from <a href="https://elevenlabs.io" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">elevenlabs.io</a>
-                  </p>
-                </div>
-              </div>
-
-              {/* Voice Selection */}
-              <div>
-                <label className="block text-white font-bold mb-2">Voice Selection</label>
-                <select
-                  value={selectedVoice}
-                  onChange={(e) => setSelectedVoice(e.target.value)}
-                  className="w-full p-3 bg-black border-2 border-white text-white rounded"
-                  disabled={!elevenLabsApiKey || availableVoices.length === 0}
-                >
-                  <option value="">Select a voice...</option>
-                  {availableVoices.map(voice => (
-                    <option key={voice.voice_id} value={voice.voice_id}>
-                      {voice.name} ({voice.category})
-                    </option>
-                  ))}
-                </select>
-                {availableVoices.length === 0 && elevenLabsApiKey && (
-                  <p className="text-gray-400 text-sm mt-2">Loading voices...</p>
-                )}
-              </div>
-
-              {/* File Content Preview */}
-              {selectedVideo?.original_file_content && (
-                <div>
-                  <label className="block text-white font-bold mb-2">File Content Analysis</label>
-                  <div className="bg-black border-2 border-white rounded p-3 max-h-32 overflow-y-auto">
-                    <pre className="text-gray-300 text-xs font-mono whitespace-pre-wrap">
-                      {selectedVideo.original_file_content.substring(0, 300)}
-                      {selectedVideo.original_file_content.length > 300 && '...'}
-                    </pre>
-                  </div>
-                  <p className="text-gray-400 text-sm mt-2">
-                    AI will analyze this actual code to create a relevant script
-                  </p>
-                </div>
-              )}
-
-              {/* Script */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-white font-bold">Script</label>
-                  <button
-                    onClick={generateAIScript}
-                    disabled={isGeneratingScript || !selectedVideo || !xaiApiKey || !selectedVideo?.original_file_content}
-                    className="flex items-center gap-2 bg-white hover:bg-gray-200 disabled:bg-gray-600 
-                             text-black px-3 py-1 rounded font-bold transition-colors text-sm border-2 border-white"
-                  >
-                    {isGeneratingScript ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Wand2 className="w-4 h-4" />
-                    )}
-                    {isGeneratingScript ? 'Analyzing...' : 'AI Generate with Grok'}
-                  </button>
-                </div>
-                <textarea
-                  value={script}
-                  onChange={(e) => setScript(e.target.value)}
-                  placeholder="Enter your script or use AI generation..."
-                  className="w-full h-32 p-3 bg-black border-2 border-white text-white rounded resize-none"
-                />
-                <div className="flex justify-between text-sm mt-2">
-                  <p className="text-gray-400">
-                    Estimated reading time: ~{estimateReadingTime(script)} seconds
-                  </p>
-                  <p className="text-gray-400">
-                    Target: {selectedVideo?.duration || 0} seconds
-                  </p>
-                </div>
-                {script && Math.abs(estimateReadingTime(script) - (selectedVideo?.duration || 0)) > 3 && (
-                  <p className="text-yellow-400 text-sm mt-1">
-                    ⚠️ Script duration doesn't match video duration. Consider regenerating.
-                  </p>
-                )}
-              </div>
-
-              {/* Audio Generation */}
-              <div>
-                <button
-                  onClick={generateAudio}
-                  disabled={isGeneratingAudio || !elevenLabsApiKey || !selectedVoice || !script}
-                  className="w-full flex items-center justify-center gap-3 py-4 px-6 rounded-lg font-bold text-lg 
-                           bg-white hover:bg-gray-200 disabled:bg-gray-600 text-black transition-colors border-2 border-white"
-                >
-                  {isGeneratingAudio ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  ) : (
-                    <Volume2 className="w-5 h-5" />
-                  )}
-                  {isGeneratingAudio ? 'Generating Audio...' : 'Generate Audio'}
-                </button>
-              </div>
-
-              {/* Audio Player */}
-              {audioUrl && (
-                <div className="bg-black border-2 border-white rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-4">
-                    <h4 className="text-white font-bold">Generated Audio</h4>
-                    <span className="text-gray-400 text-sm">
-                      {formatTime(currentTime)} / {formatTime(duration)}
-                    </span>
-                  </div>
-                  
-                  <div className="flex items-center gap-4 mb-4">
-                    <button
-                      onClick={toggleAudioPlayback}
-                      className="p-3 bg-white hover:bg-gray-200 text-black rounded border-2 border-white transition-colors"
-                    >
-                      {isPlayingAudio ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
-                    </button>
-                    
-                    <div className="flex-1 bg-gray-600 h-2 rounded">
-                      <div 
-                        className="bg-white h-2 rounded transition-all duration-100"
-                        style={{ width: `${(currentTime / duration) * 100}%` }}
-                      />
-                    </div>
-                  </div>
-
-                  <audio ref={audioRef} src={audioUrl} />
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Right Panel - Captions & Preview */}
-          <div className="w-1/2 flex flex-col">
-            <div className="p-6 border-b-2 border-white">
-              <h3 className="text-2xl font-bold text-white mb-4">Captions & Preview</h3>
-              
-              {/* Simplified Caption Controls */}
-              <div className="space-y-4">
-                <div className="flex items-center gap-4">
-                  <label className="flex items-center gap-2 text-white font-bold">
-                    <input
-                      type="checkbox"
-                      checked={captionsEnabled}
-                      onChange={(e) => setCaptionsEnabled(e.target.checked)}
-                      className="w-5 h-5"
-                    />
-                    Enable Captions
-                  </label>
-                </div>
-                
-                {captionsEnabled && (
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-white font-bold mb-2">Text Color</label>
-                      <input
-                        type="color"
-                        value={captionTextColor}
-                        onChange={(e) => setCaptionTextColor(e.target.value)}
-                        className="w-full h-10 bg-black border-2 border-white rounded cursor-pointer"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-white font-bold mb-2">Background Color</label>
-                      <input
-                        type="color"
-                        value={captionBackgroundColor}
-                        onChange={(e) => setCaptionBackgroundColor(e.target.value)}
-                        className="w-full h-10 bg-black border-2 border-white rounded cursor-pointer"
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-6">
-              {/* Video Preview */}
+                Audio Studio
+              </h2>
               {selectedVideo && (
-                <div className="mb-6">
-                  <video
-                    ref={videoRef}
-                    className="w-full max-w-xs mx-auto bg-black rounded border-2 border-white"
-                    style={{ aspectRatio: '9/16' }}
-                    src={URL.createObjectURL(new Blob([selectedVideo.video_blob], { type: 'video/mp4' }))}
-                    controls
-                    muted
-                  />
+                <div className="text-lg text-gray-400 font-medium">
+                  {selectedVideo.original_filename} • {selectedVideo.duration}s
                 </div>
               )}
+            </div>
+            <button
+              onClick={onClose}
+              className="p-3 hover:bg-white hover:text-black rounded-lg transition-colors border-2 border-white text-white"
+            >
+              <X className="w-6 h-6" />
+            </button>
+          </div>
 
-              {/* Caption Preview */}
-              {captionsEnabled && captions.length > 0 && (
-                <div className="mb-6">
-                  <h4 className="text-white font-bold mb-3">Caption Preview</h4>
-                  <div 
-                    className="p-4 rounded border-2 border-white relative"
-                    style={{ backgroundColor: '#1a1a1a', minHeight: '100px' }}
-                  >
-                    <div className="absolute bottom-4 left-4 right-4">
-                      <div 
-                        className="p-2 rounded text-center"
-                        style={{ 
-                          backgroundColor: captionBackgroundColor + 'E6',
-                          color: captionTextColor 
-                        }}
-                      >
-                        Sample caption text will appear here
-                      </div>
-                    </div>
-                  </div>
+          {/* Processing Overlay */}
+          {(isProcessingVideo || processingProgress) && (
+            <div className="absolute inset-0 bg-black/80 backdrop-blur-sm z-10 flex items-center justify-center">
+              <div className="bg-black border-2 border-white rounded-xl p-8 max-w-md text-center">
+                <div className="flex items-center justify-center gap-3 mb-4">
+                  <Loader2 className="w-8 h-8 text-white animate-spin" />
+                  <h3 className="text-2xl font-bold text-white">Processing Video</h3>
                 </div>
-              )}
-
-              {/* AI Script Info */}
-              {script && xaiApiKey && selectedVideo?.original_file_content && (
-                <div className="mb-6 bg-black border-2 border-white rounded-lg p-4">
-                  <h4 className="text-white font-bold mb-2 flex items-center gap-2">
-                    <Wand2 className="w-4 h-4" />
-                    AI-Generated Script Analysis
-                  </h4>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Based on File:</span>
-                      <span className="text-white">{selectedVideo?.original_filename}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Language:</span>
-                      <span className="text-white capitalize">{selectedVideo?.file_language}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Words:</span>
-                      <span className="text-white">{script.trim().split(/\s+/).length}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Estimated Duration:</span>
-                      <span className="text-white">{estimateReadingTime(script)}s</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Target Duration:</span>
-                      <span className="text-white">{selectedVideo?.duration || 0}s</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-400">Match Quality:</span>
-                      <span className={`font-bold ${
-                        Math.abs(estimateReadingTime(script) - (selectedVideo?.duration || 0)) <= 3 
-                          ? 'text-green-400' 
-                          : Math.abs(estimateReadingTime(script) - (selectedVideo?.duration || 0)) <= 8
-                          ? 'text-yellow-400'
-                          : 'text-red-400'
-                      }`}>
-                        {Math.abs(estimateReadingTime(script) - (selectedVideo?.duration || 0)) <= 3 
-                          ? 'Excellent' 
-                          : Math.abs(estimateReadingTime(script) - (selectedVideo?.duration || 0)) <= 8
-                          ? 'Good'
-                          : 'Needs Adjustment'}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="mt-3 p-2 bg-gray-800 rounded text-xs">
-                    <p className="text-gray-400">Script analyzes actual code content from your {selectedVideo?.file_language} file</p>
-                  </div>
+                <p className="text-lg text-gray-300 mb-4">
+                  {processingProgress || 'This will take a minute to combine video with audio...'}
+                </p>
+                <div className="w-full bg-gray-600 h-2 rounded mb-4">
+                  <div className="bg-white h-2 rounded animate-pulse" style={{ width: '100%' }} />
                 </div>
-              )}
-
-              {/* Final Processing */}
-              <div className="mt-8">
-                <button
-                  onClick={combineVideoWithAudio}
-                  disabled={isProcessingVideo || !audioBlob || !selectedVideo}
-                  className="w-full flex items-center justify-center gap-3 py-4 px-6 rounded-lg font-bold text-lg 
-                           bg-white hover:bg-gray-200 disabled:bg-gray-600 text-black transition-colors border-2 border-white"
-                >
-                  {isProcessingVideo ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  ) : (
-                    <Save className="w-5 h-5" />
-                  )}
-                  {isProcessingVideo ? 'Processing...' : 'Save to FullClip Gallery'}
-                </button>
-                <p className="text-gray-400 text-sm mt-2 text-center">
-                  This will combine your video with AI-generated audio and captions
+                <p className="text-sm text-gray-400">
+                  Please don't close this window while processing
                 </p>
               </div>
             </div>
-          </div>
-        </div>
+          )}
 
-        {/* Hidden canvas for video processing */}
-        <canvas ref={canvasRef} className="hidden" />
+          <div className="flex-1 flex overflow-hidden">
+            {/* Left Panel - Configuration */}
+            <div className="w-1/2 border-r-2 border-white flex flex-col">
+              <div className="p-6 space-y-6 overflow-y-auto">
+                {/* API Keys */}
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-white font-bold mb-2">XAI API Key (for AI Script Generation)</label>
+                    <input
+                      type="password"
+                      value={xaiApiKey}
+                      onChange={(e) => setXaiApiKey(e.target.value)}
+                      placeholder="Enter your XAI API key"
+                      className="w-full p-3 bg-black border-2 border-white text-white rounded font-mono"
+                    />
+                    <p className="text-gray-400 text-sm mt-2">
+                      Get your API key from <a href="https://x.ai" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">x.ai</a>
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-white font-bold mb-2">ElevenLabs API Key</label>
+                    <input
+                      type="password"
+                      value={elevenLabsApiKey}
+                      onChange={(e) => setElevenLabsApiKey(e.target.value)}
+                      placeholder="Enter your ElevenLabs API key"
+                      className="w-full p-3 bg-black border-2 border-white text-white rounded font-mono"
+                    />
+                    <p className="text-gray-400 text-sm mt-2">
+                      Get your API key from <a href="https://elevenlabs.io" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">elevenlabs.io</a>
+                    </p>
+                  </div>
+                </div>
+
+                {/* Voice Selection */}
+                <div>
+                  <label className="block text-white font-bold mb-2">Voice Selection</label>
+                  <select
+                    value={selectedVoice}
+                    onChange={(e) => setSelectedVoice(e.target.value)}
+                    className="w-full p-3 bg-black border-2 border-white text-white rounded"
+                    disabled={!elevenLabsApiKey || availableVoices.length === 0}
+                  >
+                    <option value="">Select a voice...</option>
+                    {availableVoices.map(voice => (
+                      <option key={voice.voice_id} value={voice.voice_id}>
+                        {voice.name} ({voice.category})
+                      </option>
+                    ))}
+                  </select>
+                  {availableVoices.length === 0 && elevenLabsApiKey && (
+                    <p className="text-gray-400 text-sm mt-2">Loading voices...</p>
+                  )}
+                </div>
+
+                {/* File Content Preview */}
+                {selectedVideo?.original_file_content && (
+                  <div>
+                    <label className="block text-white font-bold mb-2">File Content Analysis</label>
+                    <div className="bg-black border-2 border-white rounded p-3 max-h-32 overflow-y-auto">
+                      <pre className="text-gray-300 text-xs font-mono whitespace-pre-wrap">
+                        {selectedVideo.original_file_content.substring(0, 300)}
+                        {selectedVideo.original_file_content.length > 300 && '...'}
+                      </pre>
+                    </div>
+                    <p className="text-gray-400 text-sm mt-2">
+                      AI will analyze this actual code to create a relevant script
+                    </p>
+                  </div>
+                )}
+
+                {/* Script */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-white font-bold">Script</label>
+                    <button
+                      onClick={generateAIScript}
+                      disabled={isGeneratingScript || !selectedVideo || !xaiApiKey || !selectedVideo?.original_file_content}
+                      className="flex items-center gap-2 bg-white hover:bg-gray-200 disabled:bg-gray-600 
+                               text-black px-3 py-1 rounded font-bold transition-colors text-sm border-2 border-white"
+                    >
+                      {isGeneratingScript ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Wand2 className="w-4 h-4" />
+                      )}
+                      {isGeneratingScript ? 'Analyzing...' : 'AI Generate with Grok'}
+                    </button>
+                  </div>
+                  <textarea
+                    value={script}
+                    onChange={(e) => setScript(e.target.value)}
+                    placeholder="Enter your script or use AI generation..."
+                    className="w-full h-32 p-3 bg-black border-2 border-white text-white rounded resize-none"
+                  />
+                  <div className="flex justify-between text-sm mt-2">
+                    <p className="text-gray-400">
+                      Estimated reading time: ~{estimateReadingTime(script)} seconds
+                    </p>
+                    <p className="text-gray-400">
+                      Target: {selectedVideo?.duration || 0} seconds
+                    </p>
+                  </div>
+                  {script && Math.abs(estimateReadingTime(script) - (selectedVideo?.duration || 0)) > 3 && (
+                    <p className="text-yellow-400 text-sm mt-1">
+                      ⚠️ Script duration doesn't match video duration. Consider regenerating.
+                    </p>
+                  )}
+                </div>
+
+                {/* Audio Generation */}
+                <div>
+                  <button
+                    onClick={generateAudio}
+                    disabled={isGeneratingAudio || !elevenLabsApiKey || !selectedVoice || !script}
+                    className="w-full flex items-center justify-center gap-3 py-4 px-6 rounded-lg font-bold text-lg 
+                             bg-white hover:bg-gray-200 disabled:bg-gray-600 text-black transition-colors border-2 border-white"
+                  >
+                    {isGeneratingAudio ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <Volume2 className="w-5 h-5" />
+                    )}
+                    {isGeneratingAudio ? 'Generating Audio...' : 'Generate Audio'}
+                  </button>
+                </div>
+
+                {/* Audio Player */}
+                {audioUrl && (
+                  <div className="bg-black border-2 border-white rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="text-white font-bold">Generated Audio</h4>
+                      <span className="text-gray-400 text-sm">
+                        {formatTime(currentTime)} / {formatTime(duration)}
+                      </span>
+                    </div>
+                    
+                    <div className="flex items-center gap-4 mb-4">
+                      <button
+                        onClick={toggleAudioPlayback}
+                        className="p-3 bg-white hover:bg-gray-200 text-black rounded border-2 border-white transition-colors"
+                      >
+                        {isPlayingAudio ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
+                      </button>
+                      
+                      <div className="flex-1 bg-gray-600 h-2 rounded">
+                        <div 
+                          className="bg-white h-2 rounded transition-all duration-100"
+                          style={{ width: `${(currentTime / duration) * 100}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    <audio ref={audioRef} src={audioUrl} />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Right Panel - Captions & Preview */}
+            <div className="w-1/2 flex flex-col">
+              <div className="p-6 border-b-2 border-white">
+                <h3 className="text-2xl font-bold text-white mb-4">Captions & Preview</h3>
+                
+                {/* Simplified Caption Controls */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-4">
+                    <label className="flex items-center gap-2 text-white font-bold">
+                      <input
+                        type="checkbox"
+                        checked={captionsEnabled}
+                        onChange={(e) => setCaptionsEnabled(e.target.checked)}
+                        className="w-5 h-5"
+                      />
+                      Enable Captions
+                    </label>
+                  </div>
+                  
+                  {captionsEnabled && (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-white font-bold mb-2">Text Color</label>
+                        <input
+                          type="color"
+                          value={captionTextColor}
+                          onChange={(e) => setCaptionTextColor(e.target.value)}
+                          className="w-full h-10 bg-black border-2 border-white rounded cursor-pointer"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-white font-bold mb-2">Background Color</label>
+                        <input
+                          type="color"
+                          value={captionBackgroundColor}
+                          onChange={(e) => setCaptionBackgroundColor(e.target.value)}
+                          className="w-full h-10 bg-black border-2 border-white rounded cursor-pointer"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6">
+                {/* Video Preview */}
+                {selectedVideo && (
+                  <div className="mb-6">
+                    <video
+                      ref={videoRef}
+                      className="w-full max-w-xs mx-auto bg-black rounded border-2 border-white"
+                      style={{ aspectRatio: '9/16' }}
+                      src={URL.createObjectURL(new Blob([selectedVideo.video_blob], { type: 'video/mp4' }))}
+                      controls
+                      muted
+                    />
+                  </div>
+                )}
+
+                {/* Caption Preview */}
+                {captionsEnabled && captions.length > 0 && (
+                  <div className="mb-6">
+                    <h4 className="text-white font-bold mb-3">Caption Preview</h4>
+                    <div 
+                      className="p-4 rounded border-2 border-white relative"
+                      style={{ backgroundColor: '#1a1a1a', minHeight: '100px' }}
+                    >
+                      <div className="absolute bottom-4 left-4 right-4">
+                        <div 
+                          className="p-2 rounded text-center"
+                          style={{ 
+                            backgroundColor: captionBackgroundColor + 'E6',
+                            color: captionTextColor 
+                          }}
+                        >
+                          Sample caption text will appear here
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* AI Script Info */}
+                {script && xaiApiKey && selectedVideo?.original_file_content && (
+                  <div className="mb-6 bg-black border-2 border-white rounded-lg p-4">
+                    <h4 className="text-white font-bold mb-2 flex items-center gap-2">
+                      <Wand2 className="w-4 h-4" />
+                      AI-Generated Script Analysis
+                    </h4>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Based on File:</span>
+                        <span className="text-white">{selectedVideo?.original_filename}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Language:</span>
+                        <span className="text-white capitalize">{selectedVideo?.file_language}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Words:</span>
+                        <span className="text-white">{script.trim().split(/\s+/).length}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Estimated Duration:</span>
+                        <span className="text-white">{estimateReadingTime(script)}s</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Target Duration:</span>
+                        <span className="text-white">{selectedVideo?.duration || 0}s</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Match Quality:</span>
+                        <span className={`font-bold ${
+                          Math.abs(estimateReadingTime(script) - (selectedVideo?.duration || 0)) <= 3 
+                            ? 'text-green-400' 
+                            : Math.abs(estimateReadingTime(script) - (selectedVideo?.duration || 0)) <= 8
+                            ? 'text-yellow-400'
+                            : 'text-red-400'
+                        }`}>
+                          {Math.abs(estimateReadingTime(script) - (selectedVideo?.duration || 0)) <= 3 
+                            ? 'Excellent' 
+                            : Math.abs(estimateReadingTime(script) - (selectedVideo?.duration || 0)) <= 8
+                            ? 'Good'
+                            : 'Needs Adjustment'}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="mt-3 p-2 bg-gray-800 rounded text-xs">
+                      <p className="text-gray-400">Script analyzes actual code content from your {selectedVideo?.file_language} file</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Final Processing */}
+                <div className="mt-8">
+                  <button
+                    onClick={combineVideoWithAudio}
+                    disabled={isProcessingVideo || !audioBlob || !selectedVideo}
+                    className="w-full flex items-center justify-center gap-3 py-4 px-6 rounded-lg font-bold text-lg 
+                             bg-white hover:bg-gray-200 disabled:bg-gray-600 text-black transition-colors border-2 border-white"
+                  >
+                    {isProcessingVideo ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <Save className="w-5 h-5" />
+                    )}
+                    {isProcessingVideo ? 'Processing...' : 'Save to FullClip Gallery'}
+                  </button>
+                  <p className="text-gray-400 text-sm mt-2 text-center">
+                    This will combine your video with AI-generated audio and captions
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Hidden canvas for video processing */}
+          <canvas ref={canvasRef} className="hidden" />
+        </div>
       </div>
-    </div>
+
+      {/* FIXED: Custom Success Modal */}
+      <FullClipSuccessModal
+        isOpen={showSuccessModal}
+        onClose={handleSuccessModalClose}
+        filename={savedVideoFilename}
+      />
+    </>
   );
 };
 

@@ -190,21 +190,27 @@ const UnifiedGallery: React.FC<UnifiedGalleryProps> = ({
         throw new Error('Invalid video blob - size is 0');
       }
 
-      // FIXED: Use the custom filename properly
+      // FIXED: Use the custom filename properly with proper validation
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const cleanFilename = customFilename.trim() || 'untitled';
+      const cleanFilename = customFilename.trim() || pendingVideo.originalFilename.replace(/\.[^/.]+$/, '');
       const finalFilename = `${cleanFilename}-${timestamp}.mp4`;
 
-      console.log('Saving video with custom filename:', finalFilename);
+      console.log('Saving video with custom filename:', {
+        customFilename: customFilename.trim(),
+        cleanFilename,
+        finalFilename
+      });
 
       const videoId = await dbManager.saveVideo(
-        finalFilename, // Use the custom filename here
-        pendingVideo.originalFilename,
+        finalFilename, // This is the actual filename that gets stored
+        pendingVideo.originalFilename, // This is the original file reference
         pendingVideo.language,
         pendingVideo.duration,
         pendingVideo.blob,
         pendingVideo.content
       );
+      
+      console.log('Video saved successfully with ID:', videoId, 'and filename:', finalFilename);
       
       await loadAllData();
       onPendingVideoSaved?.();

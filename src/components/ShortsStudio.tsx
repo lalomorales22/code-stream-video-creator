@@ -233,6 +233,7 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
     }
   };
 
+  // FIXED: Improved caption drawing function to avoid double captions
   const drawCaptions = (ctx: CanvasRenderingContext2D, currentTime: number, captions: CaptionSegment[], canvasWidth: number, canvasHeight: number) => {
     // Find the active caption for the current time
     const activeCaption = captions.find(caption => 
@@ -241,10 +242,10 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
 
     if (!activeCaption) return;
 
-    // Caption styling - FIXED: Larger, more prominent captions
-    const fontSize = Math.max(28, canvasWidth * 0.045); // Increased font size
-    const lineHeight = fontSize * 1.3;
-    const padding = 20; // Increased padding
+    // Caption styling - positioned higher to avoid avatar overlap
+    const fontSize = Math.max(24, canvasWidth * 0.04); // Slightly smaller font
+    const lineHeight = fontSize * 1.2;
+    const padding = 16;
     const maxWidth = canvasWidth - (padding * 2);
     
     ctx.font = `bold ${fontSize}px Arial, sans-serif`;
@@ -274,17 +275,17 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
     // Calculate total text height
     const totalTextHeight = lines.length * lineHeight;
     
-    // FIXED: Position captions higher to avoid avatar overlap
-    const textY = canvasHeight - totalTextHeight - padding * 4; // Moved higher
+    // FIXED: Position captions much higher to avoid avatar overlap
+    const textY = canvasHeight - totalTextHeight - padding * 8; // Moved much higher
     
-    // Draw background for each line with stronger contrast
+    // Draw background for each line with strong contrast
     lines.forEach((line, index) => {
       const lineY = textY + (index * lineHeight);
       const metrics = ctx.measureText(line);
       const textWidth = metrics.width;
       
-      // FIXED: Stronger background for better readability
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.9)'; // Increased opacity
+      // Strong background for readability
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.95)'; // Very strong background
       ctx.fillRect(
         (canvasWidth - textWidth) / 2 - padding,
         lineY - fontSize / 2 - padding / 2,
@@ -292,9 +293,9 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
         fontSize + padding
       );
       
-      // Add border for extra contrast
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-      ctx.lineWidth = 1;
+      // Add white border for extra contrast
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+      ctx.lineWidth = 2;
       ctx.strokeRect(
         (canvasWidth - textWidth) / 2 - padding,
         lineY - fontSize / 2 - padding / 2,
@@ -302,11 +303,11 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
         fontSize + padding
       );
       
-      // Draw white text with shadow for better visibility
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
-      ctx.shadowBlur = 4;
-      ctx.shadowOffsetX = 2;
-      ctx.shadowOffsetY = 2;
+      // Draw white text with strong shadow
+      ctx.shadowColor = 'rgba(0, 0, 0, 1)';
+      ctx.shadowBlur = 6;
+      ctx.shadowOffsetX = 3;
+      ctx.shadowOffsetY = 3;
       ctx.fillStyle = 'white';
       ctx.fillText(line, canvasWidth / 2, lineY);
       
@@ -330,7 +331,8 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
     try {
       console.log('Starting video processing with avatar and audio...');
       
-      // Parse captions from the selected video
+      // FIXED: Parse captions from the selected video - the FullClip video already has captions embedded
+      // We need to extract them for overlay rendering, but be careful not to double-render
       let captions: CaptionSegment[] = [];
       try {
         if (selectedVideo.captions) {
@@ -340,12 +342,13 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
             end: cap.endTime || cap.end || 0,
             text: cap.text || ''
           }));
+          console.log('Parsed captions for overlay:', captions.length, 'segments');
         }
       } catch (error) {
         console.warn('Failed to parse captions:', error);
       }
       
-      // FIXED: Create video element for the original FullClip video (which has audio)
+      // Create video element for the original FullClip video (which has audio AND embedded captions)
       const videoBlob = new Blob([selectedVideo.video_blob], { type: 'video/mp4' });
       const videoUrl = URL.createObjectURL(videoBlob);
       
@@ -358,7 +361,7 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
       // Wait for video to load
       await new Promise((resolve, reject) => {
         video.onloadedmetadata = () => {
-          console.log('FullClip video loaded with audio:', video.duration, 'seconds');
+          console.log('FullClip video loaded with audio and embedded captions:', video.duration, 'seconds');
           resolve(void 0);
         };
         video.onerror = reject;
@@ -384,7 +387,7 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
 
       setProcessingProgress('Setting up audio recording...');
 
-      // FIXED: Proper audio handling - the FullClip video already has audio embedded
+      // FIXED: The FullClip video already has audio embedded, so we capture it directly
       // We need to capture both video and audio from the video element
       
       // Create a MediaStream from the video element (this includes both video and audio)
@@ -393,7 +396,7 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
       // Get canvas stream for video
       const canvasStream = canvas.captureStream(30);
       
-      // FIXED: Use the video's audio track directly since FullClip videos have embedded audio
+      // Use the video's audio track directly since FullClip videos have embedded audio
       let finalStream: MediaStream;
       
       if (videoStream && videoStream.getAudioTracks().length > 0) {
@@ -472,7 +475,7 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
           
           onShortsVideoSaved();
           
-          // FIXED: Show custom success modal instead of alert
+          // Show custom success modal instead of alert
           setSavedVideoFilename(filename);
           setShowSuccessModal(true);
           
@@ -496,12 +499,12 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
       const startTime = Date.now();
       const maxDuration = video.duration * 1000;
       
-      // FIXED: Start playback - the audio will be captured by MediaRecorder
+      // Start playback - the audio will be captured by MediaRecorder
       await video.play();
       
       console.log('Playback started with audio, beginning render loop...');
 
-      // Render loop with avatar overlay and captions
+      // Render loop with avatar overlay - FIXED: No additional captions since they're already embedded
       const renderFrame = () => {
         const elapsed = Date.now() - startTime;
         const progress = elapsed / maxDuration;
@@ -524,12 +527,12 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
         ctx.fillStyle = '#000000';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        // Draw video frame
+        // Draw video frame (this already includes embedded captions from FullClip)
         if (video.readyState >= 2) {
           ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         }
 
-        // FIXED: Draw avatar BEHIND captions (draw avatar first)
+        // Draw avatar OVER the video (including its embedded captions)
         const avatarWidth = (canvas.width * avatarSize) / 100;
         const avatarHeight = avatarWidth; // Keep square aspect ratio
         
@@ -561,15 +564,14 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
         const bobOffset = Math.sin(animationTime) * 5;
         avatarY += bobOffset;
 
-        // Draw avatar with slight transparency (BEHIND captions)
+        // Draw avatar with slight transparency
         ctx.globalAlpha = 0.9;
         ctx.drawImage(avatarImg, avatarX, avatarY, avatarWidth, avatarHeight);
         ctx.globalAlpha = 1;
 
-        // FIXED: Draw captions OVER everything (including avatar)
-        if (captions.length > 0) {
-          drawCaptions(ctx, currentVideoTime, captions, canvas.width, canvas.height);
-        }
+        // FIXED: DO NOT draw additional captions since the FullClip video already has them embedded
+        // The embedded captions will show through the video element
+        // Only the avatar is added as an overlay
 
         requestAnimationFrame(renderFrame);
       };
@@ -615,7 +617,7 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
               </h2>
               {selectedVideo && (
                 <div className="text-lg text-gray-400 font-medium">
-                  {selectedVideo.original_filename} • {selectedVideo.duration}s • With Audio
+                  {selectedVideo.original_filename} • {selectedVideo.duration}s • With Audio & Captions
                 </div>
               )}
             </div>
@@ -772,7 +774,7 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
                     {isProcessingVideo ? 'Processing...' : 'Create Shorts Video'}
                   </button>
                   <p className="text-gray-400 text-sm mt-2 text-center">
-                    This will add the penguin avatar with audio and captions
+                    This will add the penguin avatar to your FullClip video
                   </p>
                 </div>
               </div>
@@ -841,8 +843,13 @@ const ShortsStudio: React.FC<ShortsStudioProps> = ({
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-400">Captions:</span>
-                      <span className="text-green-400">✓ Over Avatar</span>
+                      <span className="text-green-400">✓ Embedded (No Overlay)</span>
                     </div>
+                  </div>
+                  <div className="mt-3 p-2 bg-gray-800 rounded text-xs">
+                    <p className="text-gray-400">
+                      ✨ Captions are already embedded in the FullClip video - no additional overlay needed!
+                    </p>
                   </div>
                 </div>
               </div>
