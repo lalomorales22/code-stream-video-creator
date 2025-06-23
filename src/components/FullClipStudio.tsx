@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Play, Pause, Download, Mic, Upload, Settings, ChevronDown, ChevronUp, User, Image, FileAudio, Captions, Film, Loader2, CheckCircle, AlertCircle, Save, Trash2, Copy, RefreshCw } from 'lucide-react';
+import { X, Play, Pause, Download, Mic, Upload, Settings, ChevronDown, ChevronUp, User, ImageIcon, FileAudio, Captions, Film, Loader2, CheckCircle, AlertCircle, Save, Trash2, Copy, RefreshCw } from 'lucide-react';
 import { dbManager, VideoRecord, AvatarRecord } from '../utils/database';
 
 interface FullClipStudioProps {
@@ -547,8 +547,8 @@ DESCRIPTION: [your description here]`;
       setCreationStep('Loading avatar...');
       setCreationProgress(30);
 
-      // Load avatar image
-      const avatarImg = new Image();
+      // FIXED: Use window.Image() instead of new Image() to avoid constructor conflict
+      const avatarImg = new window.Image();
       const avatarBlob = new Blob([selectedAvatar.image_data], { type: selectedAvatar.image_type });
       avatarImg.src = URL.createObjectURL(avatarBlob);
       
@@ -563,7 +563,7 @@ DESCRIPTION: [your description here]`;
         setCreationStep('Loading thumbnail...');
         setCreationProgress(35);
         
-        thumbnailImg = new Image();
+        thumbnailImg = new window.Image();
         thumbnailImg.src = URL.createObjectURL(thumbnailFile);
         
         await new Promise((resolve, reject) => {
@@ -907,95 +907,6 @@ Your professional social media video is ready to download and share!`);
           </div>
         )}
 
-        {/* NEW: Social Media Content Section - Show after successful video creation */}
-        {success && !isCreatingVideo && (
-          <div className="mx-6 mt-4 bg-black border-2 border-blue-500 rounded-lg p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-bold text-white flex items-center gap-3">
-                <div className="p-2 border-2 border-white rounded-lg">
-                  <Copy className="w-5 h-5 text-white" />
-                </div>
-                Social Media Content
-              </h3>
-              <button
-                onClick={generateSocialMediaContent}
-                disabled={!xaiApiKey || isGeneratingSocialContent}
-                className="flex items-center gap-2 bg-white hover:bg-gray-200 disabled:bg-gray-600 text-black px-4 py-2 rounded font-bold transition-colors"
-              >
-                {isGeneratingSocialContent ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <RefreshCw className="w-4 h-4" />
-                )}
-                {isGeneratingSocialContent ? 'Generating...' : socialMediaContent ? 'Regenerate' : 'Generate'}
-              </button>
-            </div>
-
-            {socialMediaContent ? (
-              <div className="space-y-4">
-                {/* Title */}
-                <div>
-                  <label className="block text-white font-bold mb-2">Title</label>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={socialMediaContent.title}
-                      onChange={(e) => setSocialMediaContent(prev => prev ? { ...prev, title: e.target.value } : null)}
-                      className="flex-1 p-3 bg-black border-2 border-white text-white rounded"
-                      placeholder="Video title..."
-                    />
-                    <button
-                      onClick={() => copyToClipboard(socialMediaContent.title, 'title')}
-                      className={`px-4 py-3 rounded font-bold transition-colors border-2 flex items-center gap-2 ${
-                        copiedField === 'title' 
-                          ? 'bg-green-500 border-green-500 text-black' 
-                          : 'bg-black border-white text-white hover:bg-white hover:text-black'
-                      }`}
-                    >
-                      {copiedField === 'title' ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                      {copiedField === 'title' ? 'Copied!' : 'Copy'}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Description */}
-                <div>
-                  <label className="block text-white font-bold mb-2">Description</label>
-                  <div className="flex gap-2">
-                    <textarea
-                      value={socialMediaContent.description}
-                      onChange={(e) => setSocialMediaContent(prev => prev ? { ...prev, description: e.target.value } : null)}
-                      className="flex-1 p-3 bg-black border-2 border-white text-white rounded h-24 resize-none"
-                      placeholder="Video description..."
-                    />
-                    <button
-                      onClick={() => copyToClipboard(socialMediaContent.description, 'description')}
-                      className={`px-4 py-3 rounded font-bold transition-colors border-2 flex items-center gap-2 ${
-                        copiedField === 'description' 
-                          ? 'bg-green-500 border-green-500 text-black' 
-                          : 'bg-black border-white text-white hover:bg-white hover:text-black'
-                      }`}
-                    >
-                      {copiedField === 'description' ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                      {copiedField === 'description' ? 'Copied!' : 'Copy'}
-                    </button>
-                  </div>
-                </div>
-
-                <p className="text-gray-400 text-sm">
-                  💡 Perfect for YouTube, TikTok, and Instagram. Edit as needed before posting!
-                </p>
-              </div>
-            ) : (
-              <div className="text-center text-gray-400 py-8">
-                <Copy className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                <p className="text-lg font-bold">Generate Title & Description</p>
-                <p className="text-sm mt-2">AI will create optimized content for social media platforms</p>
-              </div>
-            )}
-          </div>
-        )}
-
         <div className="flex-1 flex overflow-hidden">
           {/* Left Sidebar - Steps */}
           <div className="w-1/2 border-r-2 border-white flex flex-col">
@@ -1246,7 +1157,7 @@ Your professional social media video is ready to download and share!`);
                     onClick={() => thumbnailFileInputRef.current?.click()}
                     className="w-full bg-white hover:bg-gray-200 text-black px-4 py-8 rounded font-bold transition-colors flex flex-col items-center justify-center gap-3 border-2 border-dashed border-gray-400"
                   >
-                    <Image className="w-8 h-8" />
+                    <ImageIcon className="w-8 h-8" />
                     <span>Upload Thumbnail Image</span>
                     <span className="text-sm opacity-75">Shows for 1 second at video start</span>
                   </button>
@@ -1364,7 +1275,7 @@ Your professional social media video is ready to download and share!`);
             </div>
           </div>
 
-          {/* Right Sidebar - Video Preview (LARGER) */}
+          {/* Right Sidebar - Video Preview and Social Media Content */}
           <div className="w-1/2 flex flex-col">
             <div className="p-6 border-b-2 border-white">
               <h3 className="text-2xl font-bold text-white">Video Preview</h3>
@@ -1372,9 +1283,9 @@ Your professional social media video is ready to download and share!`);
             </div>
             
             <div className="flex-1 overflow-y-auto">
-              <div className="flex items-center justify-center p-8 min-h-full">
+              <div className="p-8">
                 {selectedVideo ? (
-                  <div className="w-full max-w-lg">
+                  <div className="w-full max-w-lg mx-auto">
                     <div className="relative">
                       <video
                         ref={videoRef}
@@ -1413,9 +1324,98 @@ Your professional social media video is ready to download and share!`);
                         <span>{Math.round(selectedVideo.duration)}s</span>
                       </div>
                     </div>
+
+                    {/* Social Media Content Section - Moved here under the video */}
+                    {success && !isCreatingVideo && (
+                      <div className="mt-8 bg-black border-2 border-blue-500 rounded-lg p-6">
+                        <div className="flex items-center justify-between mb-4">
+                          <h3 className="text-xl font-bold text-white flex items-center gap-3">
+                            <div className="p-2 border-2 border-white rounded-lg">
+                              <Copy className="w-5 h-5 text-white" />
+                            </div>
+                            Social Media Content
+                          </h3>
+                          <button
+                            onClick={generateSocialMediaContent}
+                            disabled={!xaiApiKey || isGeneratingSocialContent}
+                            className="flex items-center gap-2 bg-white hover:bg-gray-200 disabled:bg-gray-600 text-black px-4 py-2 rounded font-bold transition-colors"
+                          >
+                            {isGeneratingSocialContent ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <RefreshCw className="w-4 h-4" />
+                            )}
+                            {isGeneratingSocialContent ? 'Generating...' : socialMediaContent ? 'Regenerate' : 'Generate'}
+                          </button>
+                        </div>
+
+                        {socialMediaContent ? (
+                          <div className="space-y-4">
+                            {/* Title */}
+                            <div>
+                              <label className="block text-white font-bold mb-2">Title</label>
+                              <div className="flex gap-2">
+                                <input
+                                  type="text"
+                                  value={socialMediaContent.title}
+                                  onChange={(e) => setSocialMediaContent(prev => prev ? { ...prev, title: e.target.value } : null)}
+                                  className="flex-1 p-3 bg-black border-2 border-white text-white rounded"
+                                  placeholder="Video title..."
+                                />
+                                <button
+                                  onClick={() => copyToClipboard(socialMediaContent.title, 'title')}
+                                  className={`px-4 py-3 rounded font-bold transition-colors border-2 flex items-center gap-2 ${
+                                    copiedField === 'title' 
+                                      ? 'bg-green-500 border-green-500 text-black' 
+                                      : 'bg-black border-white text-white hover:bg-white hover:text-black'
+                                  }`}
+                                >
+                                  {copiedField === 'title' ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                                  {copiedField === 'title' ? 'Copied!' : 'Copy'}
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Description */}
+                            <div>
+                              <label className="block text-white font-bold mb-2">Description</label>
+                              <div className="flex gap-2">
+                                <textarea
+                                  value={socialMediaContent.description}
+                                  onChange={(e) => setSocialMediaContent(prev => prev ? { ...prev, description: e.target.value } : null)}
+                                  className="flex-1 p-3 bg-black border-2 border-white text-white rounded h-24 resize-none"
+                                  placeholder="Video description..."
+                                />
+                                <button
+                                  onClick={() => copyToClipboard(socialMediaContent.description, 'description')}
+                                  className={`px-4 py-3 rounded font-bold transition-colors border-2 flex items-center gap-2 ${
+                                    copiedField === 'description' 
+                                      ? 'bg-green-500 border-green-500 text-black' 
+                                      : 'bg-black border-white text-white hover:bg-white hover:text-black'
+                                  }`}
+                                >
+                                  {copiedField === 'description' ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                                  {copiedField === 'description' ? 'Copied!' : 'Copy'}
+                                </button>
+                              </div>
+                            </div>
+
+                            <p className="text-gray-400 text-sm">
+                              💡 Perfect for YouTube, TikTok, and Instagram. Edit as needed before posting!
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="text-center text-gray-400 py-8">
+                            <Copy className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                            <p className="text-lg font-bold">Generate Title & Description</p>
+                            <p className="text-sm mt-2">AI will create optimized content for social media platforms</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ) : (
-                  <div className="text-center text-gray-400">
+                  <div className="text-center text-gray-400 min-h-full flex flex-col items-center justify-center">
                     <Film className="w-20 h-20 mx-auto mb-6 opacity-50" />
                     <p className="text-2xl font-bold">No video selected</p>
                     <p className="text-lg mt-2">Select a video from the gallery to get started</p>
