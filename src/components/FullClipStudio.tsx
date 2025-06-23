@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Play, Pause, Download, Mic, Upload, Settings, ChevronDown, ChevronUp, User, Image, FileAudio, Captions, Film, Loader2, CheckCircle, AlertCircle, Save, Trash2 } from 'lucide-react';
+import { X, Play, Pause, Download, Mic, Upload, Settings, ChevronDown, ChevronUp, User, Image, FileAudio, Captions, Film, Loader2, CheckCircle, AlertCircle, Save, Trash2, Copy, RefreshCw } from 'lucide-react';
 import { dbManager, VideoRecord, AvatarRecord } from '../utils/database';
 
 interface FullClipStudioProps {
@@ -19,6 +19,11 @@ interface Voice {
   voice_id: string;
   name: string;
   category: string;
+}
+
+interface SocialMediaContent {
+  title: string;
+  description: string;
 }
 
 const FullClipStudio: React.FC<FullClipStudioProps> = ({
@@ -70,6 +75,11 @@ const FullClipStudio: React.FC<FullClipStudioProps> = ({
   const [creationStep, setCreationStep] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  
+  // NEW: Social Media Content Generation
+  const [socialMediaContent, setSocialMediaContent] = useState<SocialMediaContent | null>(null);
+  const [isGeneratingSocialContent, setIsGeneratingSocialContent] = useState(false);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
   
   // Refs
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -403,6 +413,97 @@ Return only the script text with NO symbols, emojis, or special characters.`;
     return captions;
   };
 
+  // NEW: Generate social media title and description
+  const generateSocialMediaContent = async () => {
+    if (!xaiApiKey || !selectedVideo || !script.trim()) {
+      setError('XAI API key, video, and script are required for social media content generation');
+      return;
+    }
+
+    setIsGeneratingSocialContent(true);
+    setError(null);
+
+    try {
+      const prompt = `Based on this code video script, generate a catchy title and description for social media platforms (YouTube, TikTok, Instagram).
+
+Script: "${script}"
+Programming Language: ${selectedVideo.file_language}
+Original Filename: ${selectedVideo.original_filename}
+
+Requirements:
+- Title: 5-8 words, catchy but not clickbait, mentions the programming language
+- Description: 2-3 sentences, professional but engaging, explains what viewers will learn
+- No emojis or special characters
+- Keep it simple and authentic
+- Focus on the educational value
+
+Return in this exact format:
+TITLE: [your title here]
+DESCRIPTION: [your description here]`;
+
+      const response = await fetch('https://api.x.ai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${xaiApiKey}`
+        },
+        body: JSON.stringify({
+          messages: [
+            {
+              role: 'user',
+              content: prompt
+            }
+          ],
+          model: 'grok-beta',
+          stream: false,
+          temperature: 0.7
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`XAI API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const generatedContent = data.choices?.[0]?.message?.content?.trim();
+      
+      if (generatedContent) {
+        // Parse the response
+        const titleMatch = generatedContent.match(/TITLE:\s*(.+)/i);
+        const descriptionMatch = generatedContent.match(/DESCRIPTION:\s*(.+)/i);
+        
+        if (titleMatch && descriptionMatch) {
+          setSocialMediaContent({
+            title: titleMatch[1].trim(),
+            description: descriptionMatch[1].trim()
+          });
+          setSuccess('Social media content generated successfully!');
+        } else {
+          throw new Error('Could not parse generated content');
+        }
+      } else {
+        throw new Error('No content generated');
+      }
+    } catch (error) {
+      console.error('Social media content generation failed:', error);
+      setError(`Failed to generate social media content: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setIsGeneratingSocialContent(false);
+    }
+  };
+
+  // NEW: Copy to clipboard function
+  const copyToClipboard = async (text: string, field: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedField(field);
+      setTimeout(() => setCopiedField(null), 2000);
+    } catch (error) {
+      console.error('Failed to copy to clipboard:', error);
+      setError('Failed to copy to clipboard');
+    }
+  };
+
   // FIXED: Create composite video with proper thumbnail, captions, and confirmation
   const createFullClipVideo = async () => {
     if (!selectedVideo || !audioBlob || !selectedAvatar) {
@@ -447,7 +548,7 @@ Return only the script text with NO symbols, emojis, or special characters.`;
       setCreationProgress(30);
 
       // Load avatar image
-      const avatarImg = new window.Image();
+      const avatarImg = new Image();
       const avatarBlob = new Blob([selectedAvatar.image_data], { type: selectedAvatar.image_type });
       avatarImg.src = URL.createObjectURL(avatarBlob);
       
@@ -462,7 +563,7 @@ Return only the script text with NO symbols, emojis, or special characters.`;
         setCreationStep('Loading thumbnail...');
         setCreationProgress(35);
         
-        thumbnailImg = new window.Image();
+        thumbnailImg = new Image();
         thumbnailImg.src = URL.createObjectURL(thumbnailFile);
         
         await new Promise((resolve, reject) => {
@@ -688,6 +789,13 @@ ${thumbnailFile ? '✅ Thumbnail intro (1 second)' : ''}
 
 Your professional social media video is ready to download and share!`);
       
+      // Generate social media content automatically after successful video creation
+      if (xaiApiKey) {
+        setTimeout(() => {
+          generateSocialMediaContent();
+        }, 1000);
+      }
+      
       // Cleanup
       URL.revokeObjectURL(originalVideo.src);
       URL.revokeObjectURL(avatarImg.src);
@@ -696,11 +804,6 @@ Your professional social media video is ready to download and share!`);
       }
       
       onVideoSaved?.();
-      
-      // Auto-close after showing success message
-      setTimeout(() => {
-        onClose();
-      }, 5000);
       
     } catch (error) {
       console.error('Failed to create FullClip video:', error);
@@ -801,6 +904,95 @@ Your professional social media video is ready to download and share!`);
               />
             </div>
             <p className="text-gray-400 text-sm">{creationStep}</p>
+          </div>
+        )}
+
+        {/* NEW: Social Media Content Section - Show after successful video creation */}
+        {success && !isCreatingVideo && (
+          <div className="mx-6 mt-4 bg-black border-2 border-blue-500 rounded-lg p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold text-white flex items-center gap-3">
+                <div className="p-2 border-2 border-white rounded-lg">
+                  <Copy className="w-5 h-5 text-white" />
+                </div>
+                Social Media Content
+              </h3>
+              <button
+                onClick={generateSocialMediaContent}
+                disabled={!xaiApiKey || isGeneratingSocialContent}
+                className="flex items-center gap-2 bg-white hover:bg-gray-200 disabled:bg-gray-600 text-black px-4 py-2 rounded font-bold transition-colors"
+              >
+                {isGeneratingSocialContent ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="w-4 h-4" />
+                )}
+                {isGeneratingSocialContent ? 'Generating...' : socialMediaContent ? 'Regenerate' : 'Generate'}
+              </button>
+            </div>
+
+            {socialMediaContent ? (
+              <div className="space-y-4">
+                {/* Title */}
+                <div>
+                  <label className="block text-white font-bold mb-2">Title</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={socialMediaContent.title}
+                      onChange={(e) => setSocialMediaContent(prev => prev ? { ...prev, title: e.target.value } : null)}
+                      className="flex-1 p-3 bg-black border-2 border-white text-white rounded"
+                      placeholder="Video title..."
+                    />
+                    <button
+                      onClick={() => copyToClipboard(socialMediaContent.title, 'title')}
+                      className={`px-4 py-3 rounded font-bold transition-colors border-2 flex items-center gap-2 ${
+                        copiedField === 'title' 
+                          ? 'bg-green-500 border-green-500 text-black' 
+                          : 'bg-black border-white text-white hover:bg-white hover:text-black'
+                      }`}
+                    >
+                      {copiedField === 'title' ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                      {copiedField === 'title' ? 'Copied!' : 'Copy'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Description */}
+                <div>
+                  <label className="block text-white font-bold mb-2">Description</label>
+                  <div className="flex gap-2">
+                    <textarea
+                      value={socialMediaContent.description}
+                      onChange={(e) => setSocialMediaContent(prev => prev ? { ...prev, description: e.target.value } : null)}
+                      className="flex-1 p-3 bg-black border-2 border-white text-white rounded h-24 resize-none"
+                      placeholder="Video description..."
+                    />
+                    <button
+                      onClick={() => copyToClipboard(socialMediaContent.description, 'description')}
+                      className={`px-4 py-3 rounded font-bold transition-colors border-2 flex items-center gap-2 ${
+                        copiedField === 'description' 
+                          ? 'bg-green-500 border-green-500 text-black' 
+                          : 'bg-black border-white text-white hover:bg-white hover:text-black'
+                      }`}
+                    >
+                      {copiedField === 'description' ? <CheckCircle className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                      {copiedField === 'description' ? 'Copied!' : 'Copy'}
+                    </button>
+                  </div>
+                </div>
+
+                <p className="text-gray-400 text-sm">
+                  💡 Perfect for YouTube, TikTok, and Instagram. Edit as needed before posting!
+                </p>
+              </div>
+            ) : (
+              <div className="text-center text-gray-400 py-8">
+                <Copy className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                <p className="text-lg font-bold">Generate Title & Description</p>
+                <p className="text-sm mt-2">AI will create optimized content for social media platforms</p>
+              </div>
+            )}
           </div>
         )}
 
