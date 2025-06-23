@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Play, Download, Trash2, Calendar, Clock, Code, X, Save, AlertCircle, FileAudio, Mic, Loader2, Edit3, Captions, CheckCircle, Share2, ExternalLink } from 'lucide-react';
+import { Play, Download, Trash2, Calendar, Clock, Code, X, Save, AlertCircle, FileAudio, Mic, Loader2, Edit3, Captions, CheckCircle, Share2, ExternalLink, Copy } from 'lucide-react';
 import { dbManager, VideoRecord, FullClipVideoRecord } from '../utils/database';
 import FullClipStudio from './FullClipStudio';
 
@@ -150,6 +150,13 @@ const UnifiedGallery: React.FC<UnifiedGalleryProps> = ({
     type: 'video' | 'fullclip';
   }>({ filename: '', type: 'video' });
 
+  // NEW: Social media content state
+  const [socialMediaContent, setSocialMediaContent] = useState<{
+    title: string;
+    description: string;
+  } | null>(null);
+  const [isGeneratingSocialContent, setIsGeneratingSocialContent] = useState(false);
+
   useEffect(() => {
     if (isOpen) {
       loadAllData();
@@ -167,6 +174,15 @@ const UnifiedGallery: React.FC<UnifiedGalleryProps> = ({
       setIsEditingFilename(false);
     }
   }, [pendingVideo]);
+
+  // NEW: Generate social media content when a FullClip video is selected
+  useEffect(() => {
+    if (selectedVideo && activeTab === 'fullclip') {
+      generateSocialMediaContent(selectedVideo as FullClipVideoRecord);
+    } else {
+      setSocialMediaContent(null);
+    }
+  }, [selectedVideo, activeTab]);
 
   const loadAllData = async () => {
     setLoading(true);
@@ -186,6 +202,90 @@ const UnifiedGallery: React.FC<UnifiedGalleryProps> = ({
       setError('Failed to load gallery data');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // NEW: Generate social media content for FullClip videos
+  const generateSocialMediaContent = async (video: FullClipVideoRecord) => {
+    const xaiApiKey = localStorage.getItem('xai_api_key');
+    if (!xaiApiKey) {
+      console.log('No XAI API key found, skipping social media content generation');
+      return;
+    }
+
+    setIsGeneratingSocialContent(true);
+
+    try {
+      const prompt = `Create social media content for a code video. Generate a catchy title and description for this ${video.file_language} code video.
+
+Video details:
+- Language: ${video.file_language}
+- Original filename: ${video.original_filename}
+- Script: ${video.script}
+
+Requirements:
+- Title: Short, catchy, under 60 characters
+- Description: 2-3 sentences, engaging but not overly promotional
+- Focus on what the code does, not just that it's a code video
+- Make it suitable for TikTok, YouTube Shorts, and Instagram
+- Don't use excessive emojis or hashtags in the description
+
+Return in this exact JSON format:
+{
+  "title": "Your catchy title here",
+  "description": "Your 2-3 sentence description here"
+}`;
+
+      const response = await fetch('https://api.x.ai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${xaiApiKey}`
+        },
+        body: JSON.stringify({
+          messages: [
+            {
+              role: 'user',
+              content: prompt
+            }
+          ],
+          model: 'grok-beta',
+          stream: false,
+          temperature: 0.7
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const content = data.choices?.[0]?.message?.content?.trim();
+        
+        if (content) {
+          try {
+            // Try to parse as JSON
+            const parsed = JSON.parse(content);
+            setSocialMediaContent({
+              title: parsed.title || 'Code Tutorial',
+              description: parsed.description || 'Check out this code tutorial!'
+            });
+          } catch (parseError) {
+            // Fallback if not valid JSON
+            console.warn('Failed to parse social media content as JSON, using fallback');
+            setSocialMediaContent({
+              title: `${video.file_language} Code Tutorial`,
+              description: `Learn ${video.file_language} programming with this quick tutorial. Perfect for developers looking to improve their coding skills.`
+            });
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Failed to generate social media content:', error);
+      // Set fallback content
+      setSocialMediaContent({
+        title: `${video.file_language} Code Tutorial`,
+        description: `Learn ${video.file_language} programming with this quick tutorial. Perfect for developers looking to improve their coding skills.`
+      });
+    } finally {
+      setIsGeneratingSocialContent(false);
     }
   };
 
@@ -261,6 +361,32 @@ const UnifiedGallery: React.FC<UnifiedGalleryProps> = ({
     } catch (error) {
       console.error('Failed to download video:', error);
       setError('Failed to download video');
+    }
+  };
+
+  // NEW: Copy social media content to clipboard
+  const handleCopySocialContent = async (type: 'title' | 'description') => {
+    if (!socialMediaContent) return;
+
+    try {
+      const textToCopy = type === 'title' ? socialMediaContent.title : socialMediaContent.description;
+      await navigator.clipboard.writeText(textToCopy);
+      
+      // Show temporary success feedback
+      const originalText = type === 'title' ? socialMediaContent.title : socialMediaContent.description;
+      if (type === 'title') {
+        setSocialMediaContent(prev => prev ? { ...prev, title: '✓ Copied!' } : null);
+        setTimeout(() => {
+          setSocialMediaContent(prev => prev ? { ...prev, title: originalText } : null);
+        }, 1000);
+      } else {
+        setSocialMediaContent(prev => prev ? { ...prev, description: '✓ Copied to clipboard!' } : null);
+        setTimeout(() => {
+          setSocialMediaContent(prev => prev ? { ...prev, description: originalText } : null);
+        }, 1000);
+      }
+    } catch (error) {
+      console.error('Failed to copy to clipboard:', error);
     }
   };
 
@@ -680,6 +806,61 @@ Made with CodeStream: https://codestream.app`;
             <div className="bg-black border-2 border-white rounded-lg p-4 mb-4 text-left max-h-64 overflow-y-auto">
               <h5 className="text-white font-bold mb-2 sticky top-0 bg-black">Audio Script</h5>
               <p className="text-gray-300 text-sm leading-relaxed">{(selectedVideo as FullClipVideoRecord).script}</p>
+            </div>
+          )}
+
+          {/* NEW: Social Media Content Section - Only for FullClip videos */}
+          {activeTab === 'fullclip' && (
+            <div className="bg-black border-2 border-white rounded-lg p-4 mb-4">
+              <h5 className="text-white font-bold mb-3 flex items-center gap-2">
+                <Share2 className="w-5 h-5" />
+                Social Media Content
+                {isGeneratingSocialContent && <Loader2 className="w-4 h-4 animate-spin" />}
+              </h5>
+              
+              {socialMediaContent ? (
+                <div className="space-y-4 text-left">
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-white font-bold text-sm">Title</label>
+                      <button
+                        onClick={() => handleCopySocialContent('title')}
+                        className="text-gray-400 hover:text-white transition-colors"
+                        title="Copy title"
+                      >
+                        <Copy className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <div className="bg-gray-800 border border-gray-600 rounded p-3">
+                      <p className="text-white text-sm">{socialMediaContent.title}</p>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-white font-bold text-sm">Description</label>
+                      <button
+                        onClick={() => handleCopySocialContent('description')}
+                        className="text-gray-400 hover:text-white transition-colors"
+                        title="Copy description"
+                      >
+                        <Copy className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <div className="bg-gray-800 border border-gray-600 rounded p-3">
+                      <p className="text-white text-sm leading-relaxed">{socialMediaContent.description}</p>
+                    </div>
+                  </div>
+                  
+                  <p className="text-gray-400 text-xs text-center">
+                    💡 AI-generated content optimized for social media platforms
+                  </p>
+                </div>
+              ) : (
+                <div className="text-gray-400 text-sm text-center py-4">
+                  {isGeneratingSocialContent ? 'Generating social media content...' : 'Social media content will appear here'}
+                </div>
+              )}
             </div>
           )}
           
