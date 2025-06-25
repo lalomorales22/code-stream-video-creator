@@ -31,6 +31,10 @@ const FullClipStudio: React.FC<FullClipStudioProps> = ({
   const [isApiSettingsOpen, setIsApiSettingsOpen] = useState(false);
   const [xaiApiKey, setXaiApiKey] = useState('');
   const [elevenLabsApiKey, setElevenLabsApiKey] = useState('');
+  const [isTestingXaiKey, setIsTestingXaiKey] = useState(false);
+  const [isTestingElevenLabsKey, setIsTestingElevenLabsKey] = useState(false);
+  const [xaiKeyStatus, setXaiKeyStatus] = useState<'idle' | 'valid' | 'invalid'>('idle');
+  const [elevenLabsKeyStatus, setElevenLabsKeyStatus] = useState<'idle' | 'valid' | 'invalid'>('idle');
   
   // Step 1: Voice and Audio
   const [voices, setVoices] = useState<Voice[]>([]);
@@ -41,6 +45,7 @@ const FullClipStudio: React.FC<FullClipStudioProps> = ({
   const [isGeneratingScript, setIsGeneratingScript] = useState(false);
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const [isLoadingVoices, setIsLoadingVoices] = useState(false);
   
   // Step 2: Avatar
   const [avatars, setAvatars] = useState<AvatarRecord[]>([]);
@@ -77,22 +82,33 @@ const FullClipStudio: React.FC<FullClipStudioProps> = ({
   const videoRef = useRef<HTMLVideoElement>(null);
   const avatarFileInputRef = useRef<HTMLInputElement>(null);
   const thumbnailFileInputRef = useRef<HTMLInputElement>(null);
+  const xaiKeyInputRef = useRef<HTMLInputElement>(null);
+  const elevenLabsKeyInputRef = useRef<HTMLInputElement>(null);
 
   // Load saved API keys and data on mount
   useEffect(() => {
     const savedXaiKey = localStorage.getItem('xai_api_key');
     const savedElevenLabsKey = localStorage.getItem('elevenlabs_api_key');
     
-    if (savedXaiKey) setXaiApiKey(savedXaiKey);
-    if (savedElevenLabsKey) setElevenLabsApiKey(savedElevenLabsKey);
+    if (savedXaiKey) {
+      setXaiApiKey(savedXaiKey);
+      setXaiKeyStatus('valid'); // Assume valid if saved
+    }
+    if (savedElevenLabsKey) {
+      setElevenLabsApiKey(savedElevenLabsKey);
+      setElevenLabsKeyStatus('valid'); // Assume valid if saved
+    }
     
     if (isOpen) {
-      loadVoices();
       loadAvatars();
+      // Load voices if ElevenLabs key is available
+      if (savedElevenLabsKey) {
+        loadVoices(savedElevenLabsKey);
+      }
     }
   }, [isOpen]);
 
-  // Save API keys to localStorage
+  // Save API keys to localStorage when they change
   useEffect(() => {
     if (xaiApiKey) localStorage.setItem('xai_api_key', xaiApiKey);
   }, [xaiApiKey]);
@@ -101,13 +117,138 @@ const FullClipStudio: React.FC<FullClipStudioProps> = ({
     if (elevenLabsApiKey) localStorage.setItem('elevenlabs_api_key', elevenLabsApiKey);
   }, [elevenLabsApiKey]);
 
-  const loadVoices = async () => {
-    if (!elevenLabsApiKey) return;
+  // NEW: Test XAI API key
+  const testXaiApiKey = async (apiKey: string) => {
+    if (!apiKey.trim()) {
+      setXaiKeyStatus('idle');
+      return;
+    }
+
+    setIsTestingXaiKey(true);
+    setXaiKeyStatus('idle');
+
+    try {
+      const response = await fetch('https://api.x.ai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          messages: [{ role: 'user', content: 'Test connection' }],
+          model: 'grok-beta',
+          max_tokens: 1
+        })
+      });
+
+      if (response.ok || response.status === 400) { // 400 is also valid (means auth worked)
+        setXaiKeyStatus('valid');
+        setError(null);
+      } else if (response.status === 401) {
+        setXaiKeyStatus('invalid');
+        setError('Invalid XAI API key');
+      } else {
+        setXaiKeyStatus('invalid');
+        setError(`XAI API error: ${response.status}`);
+      }
+    } catch (error) {
+      setXaiKeyStatus('invalid');
+      setError('Failed to connect to XAI API');
+    } finally {
+      setIsTestingXaiKey(false);
+    }
+  };
+
+  // NEW: Test ElevenLabs API key and load voices
+  const testElevenLabsApiKey = async (apiKey: string) => {
+    if (!apiKey.trim()) {
+      setElevenLabsKeyStatus('idle');
+      setVoices([]);
+      setSelectedVoice('');
+      return;
+    }
+
+    setIsTestingElevenLabsKey(true);
+    setElevenLabsKeyStatus('idle');
+
+    try {
+      const response = await fetch('https://api.elevenlabs.io/v1/voices', {
+        headers: {
+          'xi-api-key': apiKey
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setVoices(data.voices || []);
+        setElevenLabsKeyStatus('valid');
+        setError(null);
+        
+        // Auto-select first voice if available
+        if (data.voices?.length > 0 && !selectedVoice) {
+          setSelectedVoice(data.voices[0].voice_id);
+        }
+      } else if (response.status === 401) {
+        setElevenLabsKeyStatus('invalid');
+        setVoices([]);
+        setSelectedVoice('');
+        setError('Invalid ElevenLabs API key');
+      } else {
+        setElevenLabsKeyStatus('invalid');
+        setVoices([]);
+        setSelectedVoice('');
+        setError(`ElevenLabs API error: ${response.status}`);
+      }
+    } catch (error) {
+      setElevenLabsKeyStatus('invalid');
+      setVoices([]);
+      setSelectedVoice('');
+      setError('Failed to connect to ElevenLabs API');
+    } finally {
+      setIsTestingElevenLabsKey(false);
+    }
+  };
+
+  // NEW: Handle API key input changes with real-time testing
+  const handleXaiKeyChange = (value: string) => {
+    setXaiApiKey(value);
+    // Reset status when user is typing
+    if (value !== localStorage.getItem('xai_api_key')) {
+      setXaiKeyStatus('idle');
+    }
+  };
+
+  const handleElevenLabsKeyChange = (value: string) => {
+    setElevenLabsApiKey(value);
+    // Reset status when user is typing
+    if (value !== localStorage.getItem('elevenlabs_api_key')) {
+      setElevenLabsKeyStatus('idle');
+    }
+  };
+
+  // NEW: Handle Enter key press for API key testing
+  const handleXaiKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      testXaiApiKey(xaiApiKey);
+    }
+  };
+
+  const handleElevenLabsKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      testElevenLabsApiKey(elevenLabsApiKey);
+    }
+  };
+
+  const loadVoices = async (apiKey?: string) => {
+    const keyToUse = apiKey || elevenLabsApiKey;
+    if (!keyToUse) return;
+    
+    setIsLoadingVoices(true);
     
     try {
       const response = await fetch('https://api.elevenlabs.io/v1/voices', {
         headers: {
-          'xi-api-key': elevenLabsApiKey
+          'xi-api-key': keyToUse
         }
       });
       
@@ -120,6 +261,8 @@ const FullClipStudio: React.FC<FullClipStudioProps> = ({
       }
     } catch (error) {
       console.error('Failed to load voices:', error);
+    } finally {
+      setIsLoadingVoices(false);
     }
   };
 
@@ -730,6 +873,17 @@ Redirecting to gallery...`);
     return isStepComplete(1) && isStepComplete(2); // Steps 1 and 2 are required
   };
 
+  // NEW: Get status icon for API keys
+  const getStatusIcon = (status: 'idle' | 'valid' | 'invalid', isLoading: boolean) => {
+    if (isLoading) return <Loader2 className="w-4 h-4 animate-spin text-blue-500" />;
+    
+    switch (status) {
+      case 'valid': return <CheckCircle className="w-4 h-4 text-green-500" />;
+      case 'invalid': return <AlertCircle className="w-4 h-4 text-red-500" />;
+      default: return null;
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -828,24 +982,58 @@ Redirecting to gallery...`);
                 {isApiSettingsOpen && (
                   <div className="mt-4 space-y-4">
                     <div>
-                      <label className="block text-white font-bold mb-2">XAI API Key</label>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="text-white font-bold">XAI API Key</label>
+                        <div className="flex items-center gap-2">
+                          {getStatusIcon(xaiKeyStatus, isTestingXaiKey)}
+                          <button
+                            onClick={() => testXaiApiKey(xaiApiKey)}
+                            disabled={isTestingXaiKey || !xaiApiKey.trim()}
+                            className="text-sm bg-white hover:bg-gray-200 disabled:bg-gray-600 text-black px-3 py-1 rounded font-bold transition-colors"
+                          >
+                            {isTestingXaiKey ? 'Testing...' : 'Test'}
+                          </button>
+                        </div>
+                      </div>
                       <input
+                        ref={xaiKeyInputRef}
                         type="password"
                         value={xaiApiKey}
-                        onChange={(e) => setXaiApiKey(e.target.value)}
-                        placeholder="Enter your XAI API key"
+                        onChange={(e) => handleXaiKeyChange(e.target.value)}
+                        onKeyPress={handleXaiKeyPress}
+                        placeholder="Enter your XAI API key (Press Enter to test)"
                         className="w-full p-3 bg-black border-2 border-white text-white rounded"
                       />
+                      <p className="text-gray-400 text-sm mt-1">
+                        💡 Press Enter to test connection • {xaiKeyStatus === 'valid' ? '✅ Connected' : xaiKeyStatus === 'invalid' ? '❌ Invalid' : '⏳ Not tested'}
+                      </p>
                     </div>
                     <div>
-                      <label className="block text-white font-bold mb-2">ElevenLabs API Key</label>
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="text-white font-bold">ElevenLabs API Key</label>
+                        <div className="flex items-center gap-2">
+                          {getStatusIcon(elevenLabsKeyStatus, isTestingElevenLabsKey || isLoadingVoices)}
+                          <button
+                            onClick={() => testElevenLabsApiKey(elevenLabsApiKey)}
+                            disabled={isTestingElevenLabsKey || isLoadingVoices || !elevenLabsApiKey.trim()}
+                            className="text-sm bg-white hover:bg-gray-200 disabled:bg-gray-600 text-black px-3 py-1 rounded font-bold transition-colors"
+                          >
+                            {isTestingElevenLabsKey || isLoadingVoices ? 'Testing...' : 'Test'}
+                          </button>
+                        </div>
+                      </div>
                       <input
+                        ref={elevenLabsKeyInputRef}
                         type="password"
                         value={elevenLabsApiKey}
-                        onChange={(e) => setElevenLabsApiKey(e.target.value)}
-                        placeholder="Enter your ElevenLabs API key"
+                        onChange={(e) => handleElevenLabsKeyChange(e.target.value)}
+                        onKeyPress={handleElevenLabsKeyPress}
+                        placeholder="Enter your ElevenLabs API key (Press Enter to test)"
                         className="w-full p-3 bg-black border-2 border-white text-white rounded"
                       />
+                      <p className="text-gray-400 text-sm mt-1">
+                        💡 Press Enter to test and load voices • {elevenLabsKeyStatus === 'valid' ? `✅ Connected (${voices.length} voices)` : elevenLabsKeyStatus === 'invalid' ? '❌ Invalid' : '⏳ Not tested'}
+                      </p>
                     </div>
                   </div>
                 )}
@@ -864,14 +1052,19 @@ Redirecting to gallery...`);
 
                 {/* Voice Selection */}
                 <div className="mb-4">
-                  <label className="block text-white font-bold mb-2">Select Voice</label>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-white font-bold">Select Voice</label>
+                    {isLoadingVoices && <Loader2 className="w-4 h-4 animate-spin text-blue-500" />}
+                  </div>
                   <select
                     value={selectedVoice}
                     onChange={(e) => setSelectedVoice(e.target.value)}
                     className="w-full p-3 bg-black border-2 border-white text-white rounded"
-                    disabled={!elevenLabsApiKey}
+                    disabled={!elevenLabsApiKey || elevenLabsKeyStatus !== 'valid'}
                   >
-                    <option value="">Choose a voice...</option>
+                    <option value="">
+                      {elevenLabsKeyStatus !== 'valid' ? 'Connect ElevenLabs API first' : 'Choose a voice...'}
+                    </option>
                     {voices.map(voice => (
                       <option key={voice.voice_id} value={voice.voice_id}>
                         {voice.name} ({voice.category})
@@ -886,7 +1079,7 @@ Redirecting to gallery...`);
                     <label className="text-white font-bold">AI Script</label>
                     <button
                       onClick={generateScript}
-                      disabled={!xaiApiKey || isGeneratingScript}
+                      disabled={xaiKeyStatus !== 'valid' || isGeneratingScript}
                       className="bg-white hover:bg-gray-200 disabled:bg-gray-600 text-black px-4 py-2 rounded font-bold transition-colors"
                     >
                       {isGeneratingScript ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Generate'}
@@ -907,7 +1100,7 @@ Redirecting to gallery...`);
                 <div className="flex gap-3">
                   <button
                     onClick={generateAudio}
-                    disabled={!elevenLabsApiKey || !selectedVoice || !script.trim() || isGeneratingAudio}
+                    disabled={elevenLabsKeyStatus !== 'valid' || !selectedVoice || !script.trim() || isGeneratingAudio}
                     className="flex-1 bg-white hover:bg-gray-200 disabled:bg-gray-600 text-black px-4 py-3 rounded font-bold transition-colors flex items-center justify-center gap-2"
                   >
                     {isGeneratingAudio ? <Loader2 className="w-5 h-5 animate-spin" /> : <Mic className="w-5 h-5" />}
@@ -959,7 +1152,7 @@ Redirecting to gallery...`);
                     
                     <button
                       onClick={generateAIAvatar}
-                      disabled={!xaiApiKey || isGeneratingAvatar}
+                      disabled={xaiKeyStatus !== 'valid' || isGeneratingAvatar}
                       className="flex-1 bg-black border-2 border-white text-white hover:bg-white hover:text-black px-4 py-3 rounded font-bold transition-colors flex items-center justify-center gap-2"
                     >
                       {isGeneratingAvatar ? <Loader2 className="w-5 h-5 animate-spin" /> : <User className="w-5 h-5" />}
