@@ -1,18 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Play, Pause, Download, Mic, Upload, Settings, ChevronDown, ChevronUp, User, ImageIcon, FileAudio, Captions, Film, Loader2, CheckCircle, AlertCircle, Save, Trash2 } from 'lucide-react';
-import { dbManager, VideoRecord, AvatarRecord } from '../utils/database';
+import { X, Settings, Mic, Play, Pause, Download, Upload, Trash2, Loader2, Volume2, VolumeX, Captions, CheckCircle, Share2, Copy, ExternalLink } from 'lucide-react';
+import { dbManager, VideoRecord } from '../utils/database';
 
 interface FullClipStudioProps {
   isOpen: boolean;
   onClose: () => void;
   selectedVideo: VideoRecord | null;
-  onVideoSaved?: () => void;
-}
-
-interface CaptionSegment {
-  start: number;
-  end: number;
-  text: string;
+  onVideoSaved: () => void;
 }
 
 interface Voice {
@@ -21,298 +15,270 @@ interface Voice {
   category: string;
 }
 
+interface CaptionSegment {
+  start: number;
+  end: number;
+  text: string;
+}
+
+interface Avatar {
+  id: number;
+  name: string;
+  description: string;
+  url: string;
+  type: 'uploaded' | 'generated' | 'preset';
+}
+
+// Preset penguin avatars
+const presetAvatars: Avatar[] = [
+  {
+    id: -1,
+    name: 'Classic Penguin',
+    description: 'Professional penguin avatar',
+    url: '/src/assets/images/avatar1.png',
+    type: 'preset'
+  },
+  {
+    id: -2,
+    name: 'Cool Penguin',
+    description: 'Penguin with sunglasses',
+    url: '/src/assets/images/avatar2.png',
+    type: 'preset'
+  },
+  {
+    id: -3,
+    name: 'Smart Penguin',
+    description: 'Penguin with glasses',
+    url: '/src/assets/images/avatar3.png',
+    type: 'preset'
+  },
+  {
+    id: -4,
+    name: 'Tech Penguin',
+    description: 'Penguin with headphones',
+    url: '/src/assets/images/avatar4.png',
+    type: 'preset'
+  }
+];
+
 const FullClipStudio: React.FC<FullClipStudioProps> = ({
   isOpen,
   onClose,
   selectedVideo,
   onVideoSaved
 }) => {
-  // API Settings State
-  const [isApiSettingsOpen, setIsApiSettingsOpen] = useState(false);
+  // API Keys and Settings
   const [xaiApiKey, setXaiApiKey] = useState('');
   const [elevenLabsApiKey, setElevenLabsApiKey] = useState('');
-  const [isTestingXaiKey, setIsTestingXaiKey] = useState(false);
-  const [isTestingElevenLabsKey, setIsTestingElevenLabsKey] = useState(false);
-  const [xaiKeyStatus, setXaiKeyStatus] = useState<'idle' | 'valid' | 'invalid'>('idle');
-  const [elevenLabsKeyStatus, setElevenLabsKeyStatus] = useState<'idle' | 'valid' | 'invalid'>('idle');
-  
-  // Step 1: Voice and Audio
+  const [isSettingsCollapsed, setIsSettingsCollapsed] = useState(true);
+  const [xaiKeyStatus, setXaiKeyStatus] = useState<'untested' | 'testing' | 'valid' | 'invalid'>('untested');
+  const [elevenLabsKeyStatus, setElevenLabsKeyStatus] = useState<'untested' | 'testing' | 'valid' | 'invalid'>('untested');
+
+  // Voice and Audio
   const [voices, setVoices] = useState<Voice[]>([]);
   const [selectedVoice, setSelectedVoice] = useState<string>('');
+  const [isLoadingVoices, setIsLoadingVoices] = useState(false);
+
+  // Script Generation
   const [script, setScript] = useState('');
-  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
-  const [audioUrl, setAudioUrl] = useState<string>('');
   const [isGeneratingScript, setIsGeneratingScript] = useState(false);
+
+  // Audio Generation
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
-  const [isLoadingVoices, setIsLoadingVoices] = useState(false);
-  
-  // Step 2: Avatar
-  const [avatars, setAvatars] = useState<AvatarRecord[]>([]);
-  const [selectedAvatar, setSelectedAvatar] = useState<AvatarRecord | null>(null);
+  const [audioProgress, setAudioProgress] = useState(0);
+  const [audioDuration, setAudioDuration] = useState(0);
+  const audioRef = useRef<HTMLAudioElement>(null);
+
+  // Avatar Management
+  const [avatars, setAvatars] = useState<Avatar[]>([]);
+  const [selectedAvatar, setSelectedAvatar] = useState<Avatar | null>(null);
   const [avatarPosition, setAvatarPosition] = useState<'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'>('bottom-right');
   const [avatarSize, setAvatarSize] = useState(120);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [isGeneratingAvatar, setIsGeneratingAvatar] = useState(false);
-  
-  // Step 3: Thumbnail
-  const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
-  const [thumbnailPreview, setThumbnailPreview] = useState<string>('');
-  
-  // Step 4: Captions
-  const [captionsEnabled, setCaptionsEnabled] = useState(true);
-  const [captionStyle, setCaptionStyle] = useState({
+  const [avatarPrompt, setAvatarPrompt] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Caption Settings
+  const [captionSettings, setCaptionSettings] = useState({
     fontSize: 24,
     fontWeight: 'bold',
     color: '#FFFFFF',
     backgroundColor: '#000000',
-    position: 'bottom'
+    backgroundOpacity: 0.7,
+    position: 'bottom',
+    maxWordsPerLine: 6
   });
-  
+
   // Video Creation
   const [isCreatingVideo, setIsCreatingVideo] = useState(false);
   const [creationProgress, setCreationProgress] = useState(0);
-  const [creationStep, setCreationStep] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-  
-  // Refs
-  const audioRef = useRef<HTMLAudioElement>(null);
+  const [creationStage, setCreationStage] = useState('');
+
+  // Social Media Content
+  const [socialMediaContent, setSocialMediaContent] = useState<{
+    title: string;
+    description: string;
+  } | null>(null);
+  const [isGeneratingSocialContent, setIsGeneratingSocialContent] = useState(false);
+
+  // Canvas and Recording
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const avatarFileInputRef = useRef<HTMLInputElement>(null);
-  const thumbnailFileInputRef = useRef<HTMLInputElement>(null);
-  const xaiKeyInputRef = useRef<HTMLInputElement>(null);
-  const elevenLabsKeyInputRef = useRef<HTMLInputElement>(null);
 
-  // Load saved API keys and data on mount
+  // Load API keys and avatars on mount
   useEffect(() => {
-    const savedXaiKey = localStorage.getItem('xai_api_key');
-    const savedElevenLabsKey = localStorage.getItem('elevenlabs_api_key');
-    
-    if (savedXaiKey) {
-      setXaiApiKey(savedXaiKey);
-      setXaiKeyStatus('valid'); // Assume valid if saved
-    }
-    if (savedElevenLabsKey) {
-      setElevenLabsApiKey(savedElevenLabsKey);
-      setElevenLabsKeyStatus('valid'); // Assume valid if saved
-    }
-    
     if (isOpen) {
-      loadAvatars();
-      // Load voices if ElevenLabs key is available
-      if (savedElevenLabsKey) {
-        loadVoices(savedElevenLabsKey);
+      const savedXaiKey = localStorage.getItem('xai_api_key') || '';
+      const savedElevenLabsKey = localStorage.getItem('elevenlabs_api_key') || '';
+      
+      setXaiApiKey(savedXaiKey);
+      setElevenLabsApiKey(savedElevenLabsKey);
+      
+      // Test keys if they exist
+      if (savedXaiKey) {
+        testXaiApiKey(savedXaiKey);
       }
+      if (savedElevenLabsKey) {
+        testElevenLabsApiKey(savedElevenLabsKey);
+      }
+      
+      loadAvatars();
     }
   }, [isOpen]);
 
-  // Save API keys to localStorage when they change
-  useEffect(() => {
-    if (xaiApiKey) localStorage.setItem('xai_api_key', xaiApiKey);
-  }, [xaiApiKey]);
-
-  useEffect(() => {
-    if (elevenLabsApiKey) localStorage.setItem('elevenlabs_api_key', elevenLabsApiKey);
-  }, [elevenLabsApiKey]);
-
-  // NEW: Test XAI API key
-  const testXaiApiKey = async (apiKey: string) => {
-    if (!apiKey.trim()) {
-      setXaiKeyStatus('idle');
+  // Test XAI API Key
+  const testXaiApiKey = async (key: string) => {
+    if (!key.trim()) {
+      setXaiKeyStatus('untested');
       return;
     }
 
-    setIsTestingXaiKey(true);
-    setXaiKeyStatus('idle');
-
+    setXaiKeyStatus('testing');
     try {
       const response = await fetch('https://api.x.ai/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
+          'Authorization': `Bearer ${key}`
         },
         body: JSON.stringify({
-          messages: [{ role: 'user', content: 'Test connection' }],
+          messages: [{ role: 'user', content: 'Test' }],
           model: 'grok-beta',
           max_tokens: 1
         })
       });
 
-      if (response.ok || response.status === 400) { // 400 is also valid (means auth worked)
+      if (response.ok || response.status === 400) { // 400 is also valid (means API key works but request format issue)
         setXaiKeyStatus('valid');
-        setError(null);
-      } else if (response.status === 401) {
-        setXaiKeyStatus('invalid');
-        setError('Invalid XAI API key');
+        localStorage.setItem('xai_api_key', key);
       } else {
         setXaiKeyStatus('invalid');
-        setError(`XAI API error: ${response.status}`);
       }
     } catch (error) {
+      console.error('XAI API key test failed:', error);
       setXaiKeyStatus('invalid');
-      setError('Failed to connect to XAI API');
-    } finally {
-      setIsTestingXaiKey(false);
     }
   };
 
-  // NEW: Test ElevenLabs API key and load voices
-  const testElevenLabsApiKey = async (apiKey: string) => {
-    if (!apiKey.trim()) {
-      setElevenLabsKeyStatus('idle');
+  // Test ElevenLabs API Key and load voices
+  const testElevenLabsApiKey = async (key: string) => {
+    if (!key.trim()) {
+      setElevenLabsKeyStatus('untested');
       setVoices([]);
-      setSelectedVoice('');
       return;
     }
 
-    setIsTestingElevenLabsKey(true);
-    setElevenLabsKeyStatus('idle');
-
-    try {
-      const response = await fetch('https://api.elevenlabs.io/v1/voices', {
-        headers: {
-          'xi-api-key': apiKey
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setVoices(data.voices || []);
-        setElevenLabsKeyStatus('valid');
-        setError(null);
-        
-        // Auto-select first voice if available
-        if (data.voices?.length > 0 && !selectedVoice) {
-          setSelectedVoice(data.voices[0].voice_id);
-        }
-      } else if (response.status === 401) {
-        setElevenLabsKeyStatus('invalid');
-        setVoices([]);
-        setSelectedVoice('');
-        setError('Invalid ElevenLabs API key');
-      } else {
-        setElevenLabsKeyStatus('invalid');
-        setVoices([]);
-        setSelectedVoice('');
-        setError(`ElevenLabs API error: ${response.status}`);
-      }
-    } catch (error) {
-      setElevenLabsKeyStatus('invalid');
-      setVoices([]);
-      setSelectedVoice('');
-      setError('Failed to connect to ElevenLabs API');
-    } finally {
-      setIsTestingElevenLabsKey(false);
-    }
-  };
-
-  // NEW: Handle API key input changes with real-time testing
-  const handleXaiKeyChange = (value: string) => {
-    setXaiApiKey(value);
-    // Reset status when user is typing
-    if (value !== localStorage.getItem('xai_api_key')) {
-      setXaiKeyStatus('idle');
-    }
-  };
-
-  const handleElevenLabsKeyChange = (value: string) => {
-    setElevenLabsApiKey(value);
-    // Reset status when user is typing
-    if (value !== localStorage.getItem('elevenlabs_api_key')) {
-      setElevenLabsKeyStatus('idle');
-    }
-  };
-
-  // NEW: Handle Enter key press for API key testing
-  const handleXaiKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      testXaiApiKey(xaiApiKey);
-    }
-  };
-
-  const handleElevenLabsKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      testElevenLabsApiKey(elevenLabsApiKey);
-    }
-  };
-
-  const loadVoices = async (apiKey?: string) => {
-    const keyToUse = apiKey || elevenLabsApiKey;
-    if (!keyToUse) return;
-    
+    setElevenLabsKeyStatus('testing');
     setIsLoadingVoices(true);
     
     try {
       const response = await fetch('https://api.elevenlabs.io/v1/voices', {
         headers: {
-          'xi-api-key': keyToUse
+          'xi-api-key': key
         }
       });
-      
+
       if (response.ok) {
         const data = await response.json();
-        setVoices(data.voices || []);
-        if (data.voices?.length > 0 && !selectedVoice) {
-          setSelectedVoice(data.voices[0].voice_id);
+        const voiceList = data.voices || [];
+        setVoices(voiceList);
+        setElevenLabsKeyStatus('valid');
+        localStorage.setItem('elevenlabs_api_key', key);
+        
+        // Auto-select first voice
+        if (voiceList.length > 0 && !selectedVoice) {
+          setSelectedVoice(voiceList[0].voice_id);
         }
+      } else {
+        setElevenLabsKeyStatus('invalid');
+        setVoices([]);
       }
     } catch (error) {
-      console.error('Failed to load voices:', error);
+      console.error('ElevenLabs API key test failed:', error);
+      setElevenLabsKeyStatus('invalid');
+      setVoices([]);
     } finally {
       setIsLoadingVoices(false);
     }
   };
 
-  const loadAvatars = async () => {
-    try {
-      const avatarRecords = await dbManager.getAllAvatars();
-      setAvatars(avatarRecords);
-    } catch (error) {
-      console.error('Failed to load avatars:', error);
+  // Handle API key input with Enter key
+  const handleApiKeyKeyPress = (e: React.KeyboardEvent, type: 'xai' | 'elevenlabs') => {
+    if (e.key === 'Enter') {
+      if (type === 'xai') {
+        testXaiApiKey(xaiApiKey);
+      } else {
+        testElevenLabsApiKey(elevenLabsApiKey);
+      }
     }
   };
 
+  // Load avatars from database and combine with presets
+  const loadAvatars = async () => {
+    try {
+      const dbAvatars = await dbManager.getAllAvatars();
+      const dbAvatarsWithUrls = dbAvatars.map(avatar => ({
+        id: avatar.id,
+        name: avatar.name,
+        description: avatar.description,
+        url: URL.createObjectURL(new Blob([avatar.image_data], { type: avatar.image_type })),
+        type: avatar.avatar_type
+      }));
+      
+      setAvatars([...presetAvatars, ...dbAvatarsWithUrls]);
+    } catch (error) {
+      console.error('Failed to load avatars:', error);
+      setAvatars(presetAvatars);
+    }
+  };
+
+  // Generate script using XAI
   const generateScript = async () => {
-    if (!xaiApiKey || !selectedVideo) {
-      setError('XAI API key and video are required for script generation');
+    if (!selectedVideo || !xaiApiKey || xaiKeyStatus !== 'valid') {
+      alert('Please ensure you have a valid XAI API key and a selected video.');
       return;
     }
 
     setIsGeneratingScript(true);
-    setError(null);
-
     try {
-      // FIXED: Enhanced prompt to avoid symbols and ensure voice-friendly text
-      const prompt = `Analyze this ${selectedVideo.file_language} code and create a 30-45 second engaging narration script for a social media video. Focus on what the code actually does, mention specific functions, variables, and logic patterns you see. Make it conversational and educational.
+      const prompt = `Analyze this ${selectedVideo.file_language} code and create a natural, conversational script for a vertical video (TikTok/YouTube Shorts style). The script should be engaging and educational, explaining what the code does in simple terms.
 
-CRITICAL REQUIREMENTS FOR VOICE SYNTHESIS:
-- Use ONLY standard words and letters - NO symbols, emojis, or special characters
-- For URLs like "example.com" say "example dot com"
-- For file extensions like ".js" say "dot js" or "JavaScript file"
-- For operators like "==" say "equals equals" or "double equals"
-- For symbols like "@" say "at symbol" or "at sign"
-- For "#" say "hashtag" or "number sign"
-- For "&" say "and"
-- For "%" say "percent"
-- Spell out ALL punctuation and symbols in words
-- Keep sentences natural and conversational
-- Avoid technical jargon that might be hard to pronounce
-
-Code to analyze:
+Code content:
 ${selectedVideo.original_file_content}
 
-Create a script that:
-1. Briefly explains what this specific code does
-2. Mentions actual function names, variables, or key concepts from the code
-3. Is engaging for social media (TikTok, Instagram, YouTube Shorts)
-4. Is exactly 30-45 seconds when spoken at normal pace
-5. Sounds natural and conversational
-6. Uses only voice-friendly words and phrases
+Requirements:
+- Write in a conversational, friendly tone
+- Explain the code's purpose and key functionality
+- Keep it concise but informative (aim for 30-60 seconds when spoken)
+- Use simple language that beginners can understand
+- Don't just read the code line by line - explain the concepts
+- Make it engaging for social media audiences
+- Focus on what the code accomplishes, not just syntax
 
-Return only the script text with NO symbols, emojis, or special characters.`;
+Write the script as if you're talking directly to the viewer, explaining this code in an interesting way.`;
 
       const response = await fetch('https://api.x.ai/v1/chat/completions', {
         method: 'POST',
@@ -333,42 +299,29 @@ Return only the script text with NO symbols, emojis, or special characters.`;
         })
       });
 
-      if (!response.ok) {
-        throw new Error(`XAI API error: ${response.status}`);
-      }
-
-      const data = await response.json();
-      let generatedScript = data.choices?.[0]?.message?.content?.trim();
-      
-      if (generatedScript) {
-        // FIXED: Clean up any remaining symbols that might cause voice issues
-        generatedScript = generatedScript
-          .replace(/[^\w\s.,!?-]/g, ' ') // Remove special characters except basic punctuation
-          .replace(/\s+/g, ' ') // Clean up multiple spaces
-          .trim();
-        
+      if (response.ok) {
+        const data = await response.json();
+        const generatedScript = data.choices?.[0]?.message?.content?.trim() || '';
         setScript(generatedScript);
-        setSuccess('Script generated successfully! Review and edit if needed.');
       } else {
-        throw new Error('No script generated');
+        throw new Error('Failed to generate script');
       }
     } catch (error) {
       console.error('Script generation failed:', error);
-      setError(`Failed to generate script: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      alert('Failed to generate script. Please check your API key and try again.');
     } finally {
       setIsGeneratingScript(false);
     }
   };
 
+  // Generate audio using ElevenLabs
   const generateAudio = async () => {
-    if (!elevenLabsApiKey || !selectedVoice || !script.trim()) {
-      setError('ElevenLabs API key, voice selection, and script are required');
+    if (!script.trim() || !selectedVoice || !elevenLabsApiKey || elevenLabsKeyStatus !== 'valid') {
+      alert('Please ensure you have a script, selected voice, and valid ElevenLabs API key.');
       return;
     }
 
     setIsGeneratingAudio(true);
-    setError(null);
-
     try {
       const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${selectedVoice}`, {
         method: 'POST',
@@ -387,32 +340,30 @@ Return only the script text with NO symbols, emojis, or special characters.`;
         })
       });
 
-      if (!response.ok) {
-        throw new Error(`ElevenLabs API error: ${response.status}`);
+      if (response.ok) {
+        const audioBlob = await response.blob();
+        setAudioBlob(audioBlob);
+        
+        // Load audio to get duration
+        const audio = new Audio(URL.createObjectURL(audioBlob));
+        audio.addEventListener('loadedmetadata', () => {
+          setAudioDuration(audio.duration);
+        });
+      } else {
+        throw new Error('Failed to generate audio');
       }
-
-      const audioData = await response.blob();
-      setAudioBlob(audioData);
-      
-      // Create URL for audio playback
-      if (audioUrl) {
-        URL.revokeObjectURL(audioUrl);
-      }
-      const newAudioUrl = URL.createObjectURL(audioData);
-      setAudioUrl(newAudioUrl);
-      
-      setSuccess('Audio generated successfully! Click play to preview.');
     } catch (error) {
       console.error('Audio generation failed:', error);
-      setError(`Failed to generate audio: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      alert('Failed to generate audio. Please check your API key and try again.');
     } finally {
       setIsGeneratingAudio(false);
     }
   };
 
-  const handleAudioPlayback = () => {
-    if (!audioRef.current) return;
-    
+  // Play/pause audio
+  const toggleAudioPlayback = () => {
+    if (!audioRef.current || !audioBlob) return;
+
     if (isPlayingAudio) {
       audioRef.current.pause();
       setIsPlayingAudio(false);
@@ -422,13 +373,31 @@ Return only the script text with NO symbols, emojis, or special characters.`;
     }
   };
 
+  // Handle audio time updates
+  const handleAudioTimeUpdate = () => {
+    if (audioRef.current) {
+      const progress = (audioRef.current.currentTime / audioRef.current.duration) * 100;
+      setAudioProgress(progress);
+    }
+  };
+
+  // Handle audio ended
+  const handleAudioEnded = () => {
+    setIsPlayingAudio(false);
+    setAudioProgress(0);
+  };
+
+  // Upload avatar
   const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    setIsUploadingAvatar(true);
-    setError(null);
+    if (!file.type.startsWith('image/')) {
+      alert('Please upload an image file.');
+      return;
+    }
 
+    setIsUploadingAvatar(true);
     try {
       const avatarId = await dbManager.saveAvatar(
         file.name,
@@ -440,992 +409,1052 @@ Return only the script text with NO symbols, emojis, or special characters.`;
       await loadAvatars();
       
       // Select the newly uploaded avatar
-      const newAvatar = await dbManager.getAvatar(avatarId);
-      if (newAvatar) {
-        setSelectedAvatar(newAvatar);
-      }
+      const newAvatar = {
+        id: avatarId,
+        name: file.name,
+        description: 'Uploaded avatar',
+        url: URL.createObjectURL(file),
+        type: 'uploaded' as const
+      };
+      setSelectedAvatar(newAvatar);
     } catch (error) {
       console.error('Failed to upload avatar:', error);
-      setError('Failed to upload avatar');
+      alert('Failed to upload avatar.');
     } finally {
       setIsUploadingAvatar(false);
-      if (avatarFileInputRef.current) {
-        avatarFileInputRef.current.value = '';
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
       }
     }
   };
 
+  // Generate AI avatar
   const generateAIAvatar = async () => {
-    if (!xaiApiKey) {
-      setError('XAI API key is required for avatar generation');
+    if (!avatarPrompt.trim() || !xaiApiKey || xaiKeyStatus !== 'valid') {
+      alert('Please enter a prompt and ensure you have a valid XAI API key.');
       return;
     }
 
     setIsGeneratingAvatar(true);
-    setError(null);
-
     try {
-      // This would integrate with XAI's image generation API
-      // For now, we'll show a placeholder
-      setError('AI avatar generation coming soon! Please upload an avatar for now.');
+      const response = await fetch('https://api.x.ai/v1/images/generations', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${xaiApiKey}`
+        },
+        body: JSON.stringify({
+          prompt: `${avatarPrompt}, penguin character, cute, professional, avatar style, transparent background, high quality`,
+          n: 1,
+          size: '512x512'
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const imageUrl = data.data?.[0]?.url;
+        
+        if (imageUrl) {
+          // Download the image and save it
+          const imageResponse = await fetch(imageUrl);
+          const imageBlob = await imageResponse.blob();
+          const imageFile = new File([imageBlob], `ai-avatar-${Date.now()}.png`, { type: 'image/png' });
+          
+          const avatarId = await dbManager.saveAvatar(
+            `AI Avatar: ${avatarPrompt}`,
+            `Generated from prompt: ${avatarPrompt}`,
+            imageFile,
+            'generated'
+          );
+          
+          await loadAvatars();
+          
+          // Select the newly generated avatar
+          const newAvatar = {
+            id: avatarId,
+            name: `AI Avatar: ${avatarPrompt}`,
+            description: `Generated from prompt: ${avatarPrompt}`,
+            url: URL.createObjectURL(imageBlob),
+            type: 'generated' as const
+          };
+          setSelectedAvatar(newAvatar);
+          setAvatarPrompt('');
+        }
+      } else {
+        throw new Error('Failed to generate avatar');
+      }
     } catch (error) {
       console.error('Avatar generation failed:', error);
-      setError('Failed to generate avatar');
+      alert('Failed to generate avatar. Please check your API key and try again.');
     } finally {
       setIsGeneratingAvatar(false);
     }
   };
 
-  const handleThumbnailUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    setThumbnailFile(file);
-    
-    // Create preview URL
-    if (thumbnailPreview) {
-      URL.revokeObjectURL(thumbnailPreview);
-    }
-    const previewUrl = URL.createObjectURL(file);
-    setThumbnailPreview(previewUrl);
-  };
-
-  const removeThumbnail = () => {
-    setThumbnailFile(null);
-    if (thumbnailPreview) {
-      URL.revokeObjectURL(thumbnailPreview);
-      setThumbnailPreview('');
-    }
-    if (thumbnailFileInputRef.current) {
-      thumbnailFileInputRef.current.value = '';
-    }
-  };
-
-  // FIXED: Improved caption generation with better word-level synchronization
+  // Generate captions from script
   const generateCaptions = (script: string, audioDuration: number): CaptionSegment[] => {
-    if (!captionsEnabled || !script.trim()) return [];
+    const words = script.split(' ');
+    const segments: CaptionSegment[] = [];
+    const wordsPerSegment = captionSettings.maxWordsPerLine;
+    const segmentDuration = audioDuration / Math.ceil(words.length / wordsPerSegment);
 
-    // Clean and split script into words
-    const words = script.trim().split(/\s+/);
-    const captions: CaptionSegment[] = [];
-    
-    // Calculate timing: assume average speaking rate of 150 words per minute
-    const wordsPerSecond = 150 / 60; // ~2.5 words per second
-    const actualWordsPerSecond = words.length / audioDuration;
-    const timePerWord = 1 / Math.max(actualWordsPerSecond, wordsPerSecond);
-    
-    // Group words into caption segments (3-5 words per caption for better readability)
-    const wordsPerCaption = 4;
-    let currentTime = 0;
-    
-    for (let i = 0; i < words.length; i += wordsPerCaption) {
-      const captionWords = words.slice(i, i + wordsPerCaption);
-      const captionDuration = captionWords.length * timePerWord;
+    for (let i = 0; i < words.length; i += wordsPerSegment) {
+      const segmentWords = words.slice(i, i + wordsPerSegment);
+      const start = (i / wordsPerSegment) * segmentDuration;
+      const end = Math.min(start + segmentDuration, audioDuration);
       
-      // Ensure we don't exceed audio duration
-      const endTime = Math.min(currentTime + captionDuration, audioDuration);
-      
-      captions.push({
-        start: Math.round(currentTime * 10) / 10,
-        end: Math.round(endTime * 10) / 10,
-        text: captionWords.join(' ')
+      segments.push({
+        start,
+        end,
+        text: segmentWords.join(' ')
       });
-      
-      currentTime = endTime;
-      
-      // Break if we've reached the end of audio
-      if (currentTime >= audioDuration) break;
     }
 
-    // Ensure the last caption ends with the audio
-    if (captions.length > 0) {
-      captions[captions.length - 1].end = audioDuration;
-    }
-
-    console.log('Generated captions:', captions);
-    return captions;
+    return segments;
   };
 
-  // FIXED: Create composite video with proper thumbnail, captions, and navigation to gallery
+  // Generate social media content
+  const generateSocialMediaContent = async () => {
+    if (!selectedVideo || !xaiApiKey || xaiKeyStatus !== 'valid') {
+      return;
+    }
+
+    setIsGeneratingSocialContent(true);
+
+    try {
+      const prompt = `Create social media content for a code video. Generate a catchy title and description for this ${selectedVideo.file_language} code video.
+
+Video details:
+- Language: ${selectedVideo.file_language}
+- Original filename: ${selectedVideo.original_filename}
+- Script: ${script}
+
+Requirements:
+- Title: Short, catchy, under 60 characters
+- Description: 2-3 sentences, engaging but not overly promotional
+- Focus on what the code does, not just that it's a code video
+- Make it suitable for TikTok, YouTube Shorts, and Instagram
+- Don't use excessive emojis or hashtags in the description
+
+Return in this exact JSON format:
+{
+  "title": "Your catchy title here",
+  "description": "Your 2-3 sentence description here"
+}`;
+
+      const response = await fetch('https://api.x.ai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${xaiApiKey}`
+        },
+        body: JSON.stringify({
+          messages: [
+            {
+              role: 'user',
+              content: prompt
+            }
+          ],
+          model: 'grok-beta',
+          stream: false,
+          temperature: 0.7
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const content = data.choices?.[0]?.message?.content?.trim();
+        
+        if (content) {
+          try {
+            // Try to parse as JSON
+            const parsed = JSON.parse(content);
+            setSocialMediaContent({
+              title: parsed.title || 'Code Tutorial',
+              description: parsed.description || 'Check out this code tutorial!'
+            });
+          } catch (parseError) {
+            // Fallback if not valid JSON
+            console.warn('Failed to parse social media content as JSON, using fallback');
+            setSocialMediaContent({
+              title: `${selectedVideo.file_language} Code Tutorial`,
+              description: `Learn ${selectedVideo.file_language} programming with this quick tutorial. Perfect for developers looking to improve their coding skills.`
+            });
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Failed to generate social media content:', error);
+      // Set fallback content
+      setSocialMediaContent({
+        title: `${selectedVideo.file_language} Code Tutorial`,
+        description: `Learn ${selectedVideo.file_language} programming with this quick tutorial. Perfect for developers looking to improve their coding skills.`
+      });
+    } finally {
+      setIsGeneratingSocialContent(false);
+    }
+  };
+
+  // FIXED: Enhanced video creation with better synchronization
   const createFullClipVideo = async () => {
-    if (!selectedVideo || !audioBlob || !selectedAvatar) {
-      setError('Video, audio, and avatar are required');
+    if (!selectedVideo || !audioBlob || !script) {
+      alert('Please ensure you have a video, audio, and script ready.');
       return;
     }
 
     setIsCreatingVideo(true);
     setCreationProgress(0);
-    setError(null);
+    setCreationStage('Initializing...');
 
     try {
-      setCreationStep('Setting up canvas...');
-      setCreationProgress(10);
+      const canvas = canvasRef.current;
+      if (!canvas) throw new Error('Canvas not available');
 
-      // Create canvas for video composition
-      const canvas = canvasRef.current || document.createElement('canvas');
       const ctx = canvas.getContext('2d');
-      if (!ctx) throw new Error('Could not get canvas context');
+      if (!ctx) throw new Error('Canvas context not available');
 
-      // Set canvas size for vertical video
+      // FIXED: Set canvas dimensions for vertical video with consistent aspect ratio
       const width = 720;
       const height = 1280;
       canvas.width = width;
       canvas.height = height;
 
-      setCreationStep('Loading original video...');
-      setCreationProgress(20);
+      setCreationStage('Loading original video...');
+      setCreationProgress(10);
 
-      // Create video element for original video
-      const originalVideo = document.createElement('video');
-      originalVideo.src = URL.createObjectURL(new Blob([selectedVideo.video_blob], { type: 'video/mp4' }));
-      originalVideo.muted = true;
+      // Load the original video
+      const originalVideoBlob = new Blob([selectedVideo.video_blob], { type: 'video/mp4' });
+      const originalVideoUrl = URL.createObjectURL(originalVideoBlob);
       
+      const originalVideo = document.createElement('video');
+      originalVideo.src = originalVideoUrl;
+      originalVideo.muted = true;
+      originalVideo.playsInline = true;
+
       await new Promise((resolve, reject) => {
-        originalVideo.onloadeddata = resolve;
+        originalVideo.onloadedmetadata = resolve;
         originalVideo.onerror = reject;
         originalVideo.load();
       });
 
-      setCreationStep('Loading avatar...');
-      setCreationProgress(30);
+      setCreationStage('Loading audio...');
+      setCreationProgress(20);
 
-      // Load avatar image - FIXED: Use window.Image() instead of Image()
-      const avatarImg = new window.Image();
-      const avatarBlob = new Blob([selectedAvatar.image_data], { type: selectedAvatar.image_type });
-      avatarImg.src = URL.createObjectURL(avatarBlob);
+      // Load audio
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audio = new Audio(audioUrl);
       
       await new Promise((resolve, reject) => {
-        avatarImg.onload = resolve;
-        avatarImg.onerror = reject;
-      });
-
-      // FIXED: Load thumbnail image if provided
-      let thumbnailImg: HTMLImageElement | null = null;
-      if (thumbnailFile) {
-        setCreationStep('Loading thumbnail...');
-        setCreationProgress(35);
-        
-        thumbnailImg = new window.Image();
-        thumbnailImg.src = URL.createObjectURL(thumbnailFile);
-        
-        await new Promise((resolve, reject) => {
-          thumbnailImg!.onload = resolve;
-          thumbnailImg!.onerror = reject;
-        });
-      }
-
-      setCreationStep('Loading audio...');
-      setCreationProgress(40);
-
-      // Get audio duration
-      const audio = new Audio();
-      audio.src = URL.createObjectURL(audioBlob);
-      
-      const audioDuration = await new Promise<number>((resolve, reject) => {
-        audio.onloadedmetadata = () => resolve(audio.duration);
+        audio.onloadedmetadata = resolve;
         audio.onerror = reject;
         audio.load();
       });
 
-      setCreationStep('Generating synchronized captions...');
-      setCreationProgress(50);
+      const audioDuration = audio.duration;
+      
+      setCreationStage('Generating captions...');
+      setCreationProgress(30);
 
-      // FIXED: Generate better synchronized captions
+      // Generate captions
       const captions = generateCaptions(script, audioDuration);
 
-      setCreationStep('Creating composite video...');
-      setCreationProgress(60);
+      setCreationStage('Loading avatar...');
+      setCreationProgress(40);
 
-      // Set up MediaRecorder for final video
-      const stream = canvas.captureStream(30);
+      // Load avatar if selected
+      let avatarImage: HTMLImageElement | null = null;
+      if (selectedAvatar) {
+        avatarImage = new Image();
+        avatarImage.crossOrigin = 'anonymous';
+        
+        await new Promise((resolve, reject) => {
+          avatarImage!.onload = resolve;
+          avatarImage!.onerror = reject;
+          avatarImage!.src = selectedAvatar.url;
+        });
+      }
+
+      setCreationStage('Setting up recording...');
+      setCreationProgress(50);
+
+      // FIXED: Enhanced MediaRecorder setup with better codec selection and timing
+      const stream = canvas.captureStream(30); // Consistent 30 FPS
       
       // Add audio track to the stream
       const audioContext = new AudioContext();
-      const audioBuffer = await audioContext.decodeAudioData(await audioBlob.arrayBuffer());
-      const source = audioContext.createBufferSource();
-      source.buffer = audioBuffer;
-      
+      const audioSource = audioContext.createMediaElementSource(audio);
       const destination = audioContext.createMediaStreamDestination();
-      source.connect(destination);
+      audioSource.connect(destination);
+      audioSource.connect(audioContext.destination);
       
-      // Combine video and audio streams
+      // Add audio track to video stream
       const audioTrack = destination.stream.getAudioTracks()[0];
       if (audioTrack) {
         stream.addTrack(audioTrack);
       }
 
-      // Set up recording
+      // FIXED: Better codec selection for compatibility
+      const codecOptions = [
+        'video/mp4;codecs=avc1.42E01E,mp4a.40.2', // H.264 + AAC (best compatibility)
+        'video/mp4;codecs=avc1.42E01E', // H.264 baseline
+        'video/webm;codecs=vp9,opus',   // VP9 + Opus
+        'video/webm;codecs=vp8,opus',   // VP8 + Opus fallback
+        'video/webm'                    // Generic WebM
+      ];
+
+      let selectedMimeType = 'video/webm';
+      for (const codec of codecOptions) {
+        if (MediaRecorder.isTypeSupported(codec)) {
+          selectedMimeType = codec;
+          console.log('Using codec:', codec);
+          break;
+        }
+      }
+
       const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
-        videoBitsPerSecond: 8000000,
-        audioBitsPerSecond: 128000
+        mimeType: selectedMimeType,
+        videoBitsPerSecond: 8000000, // 8 Mbps for high quality
+        audioBitsPerSecond: 128000   // 128 kbps for audio
       });
 
       const recordedChunks: Blob[] = [];
+      
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
           recordedChunks.push(event.data);
         }
       };
 
-      setCreationStep('Recording composite video...');
-      setCreationProgress(70);
+      setCreationStage('Recording video...');
+      setCreationProgress(60);
 
-      // Start recording
-      mediaRecorder.start(100);
-      source.start();
+      // FIXED: Improved rendering loop with better timing and synchronization
+      let startTime = 0;
+      let animationId: number;
+      let isRecording = false;
 
-      // Animation loop for video composition
-      const startTime = Date.now();
-      const videoDuration = Math.max(selectedVideo.duration, audioDuration) * 1000; // Convert to ms
-      const thumbnailDuration = 1000; // Show thumbnail for 1 second
-      
-      const animate = () => {
-        const currentTime = Date.now() - startTime;
-        const progress = Math.min(currentTime / videoDuration, 1);
+      const render = (currentTime: number) => {
+        if (!isRecording) {
+          startTime = currentTime;
+          isRecording = true;
+        }
+
+        const elapsed = (currentTime - startTime) / 1000; // Convert to seconds
         
-        // Clear canvas
+        // Clear canvas with black background
         ctx.fillStyle = '#000000';
         ctx.fillRect(0, 0, width, height);
 
-        // FIXED: Show thumbnail for first 1 second, then original video
-        if (thumbnailImg && currentTime < thumbnailDuration) {
-          // Draw thumbnail for first 1 second
-          ctx.drawImage(thumbnailImg, 0, 0, width, height);
-        } else {
-          // Draw original video frame
-          const videoProgress = thumbnailImg ? 
-            Math.max(0, (currentTime - thumbnailDuration) / (videoDuration - thumbnailDuration)) :
-            progress;
-          originalVideo.currentTime = videoProgress * selectedVideo.duration;
-          ctx.drawImage(originalVideo, 0, 0, width, height);
-        }
-
-        // Draw avatar
-        const avatarX = avatarPosition.includes('right') ? width - avatarSize - 20 : 20;
-        const avatarY = avatarPosition.includes('bottom') ? height - avatarSize - 20 : 20;
-        
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(avatarX + avatarSize/2, avatarY + avatarSize/2, avatarSize/2, 0, 2 * Math.PI);
-        ctx.clip();
-        ctx.drawImage(avatarImg, avatarX, avatarY, avatarSize, avatarSize);
-        ctx.restore();
-
-        // Draw avatar border
-        ctx.strokeStyle = '#FFFFFF';
-        ctx.lineWidth = 4;
-        ctx.beginPath();
-        ctx.arc(avatarX + avatarSize/2, avatarY + avatarSize/2, avatarSize/2, 0, 2 * Math.PI);
-        ctx.stroke();
-
-        // FIXED: Draw synchronized captions with proper background
-        if (captionsEnabled) {
-          const currentTimeSeconds = progress * audioDuration;
-          const currentCaption = captions.find(cap => 
-            currentTimeSeconds >= cap.start && currentTimeSeconds <= cap.end
-          );
-
-          if (currentCaption) {
-            ctx.font = `${captionStyle.fontWeight} ${captionStyle.fontSize}px Arial`;
-            ctx.textAlign = 'center';
-
-            // FIXED: Better text wrapping - split by words, not arbitrary character count
-            const words = currentCaption.text.split(' ');
-            const maxWordsPerLine = 3; // Fewer words per line for better readability
-            const textLines = [];
+        // FIXED: Better video synchronization - ensure video time matches audio time
+        if (elapsed <= audioDuration) {
+          // Update video time to match audio
+          originalVideo.currentTime = Math.min(elapsed, originalVideo.duration);
+          
+          // FIXED: Wait for video to seek to correct time before drawing
+          if (Math.abs(originalVideo.currentTime - elapsed) < 0.1) { // Allow small tolerance
+            // Draw the original video (scaled to fit canvas)
+            const videoAspectRatio = originalVideo.videoWidth / originalVideo.videoHeight;
+            const canvasAspectRatio = width / height;
             
-            for (let i = 0; i < words.length; i += maxWordsPerLine) {
-              textLines.push(words.slice(i, i + maxWordsPerLine).join(' '));
+            let drawWidth = width;
+            let drawHeight = height;
+            let drawX = 0;
+            let drawY = 0;
+            
+            if (videoAspectRatio > canvasAspectRatio) {
+              // Video is wider than canvas
+              drawHeight = width / videoAspectRatio;
+              drawY = (height - drawHeight) / 2;
+            } else {
+              // Video is taller than canvas
+              drawWidth = height * videoAspectRatio;
+              drawX = (width - drawWidth) / 2;
             }
-
-            const lineHeight = captionStyle.fontSize + 10;
-            const totalHeight = textLines.length * lineHeight;
-            const startY = height - 150 - totalHeight;
-
-            textLines.forEach((line, index) => {
-              const y = startY + (index * lineHeight);
-              
-              // FIXED: Measure text width for proper background sizing
-              const textMetrics = ctx.measureText(line);
-              const textWidth = textMetrics.width;
-              const padding = 20;
-              
-              // Draw background rectangle with proper sizing and rounded corners
-              ctx.fillStyle = captionStyle.backgroundColor;
-              ctx.beginPath();
-              ctx.roundRect(
-                width/2 - textWidth/2 - padding, 
-                y - captionStyle.fontSize - 8, 
-                textWidth + (padding * 2), 
-                captionStyle.fontSize + 20,
-                8 // Rounded corners
-              );
-              ctx.fill();
-              
-              // Draw text
-              ctx.fillStyle = captionStyle.color;
-              ctx.fillText(line, width/2, y);
-            });
+            
+            ctx.drawImage(originalVideo, drawX, drawY, drawWidth, drawHeight);
           }
-        }
 
-        // Update progress
-        const recordingProgress = 70 + (progress * 20);
-        setCreationProgress(Math.round(recordingProgress));
+          // Draw avatar if selected
+          if (avatarImage && selectedAvatar) {
+            const avatarX = avatarPosition.includes('right') ? width - avatarSize - 20 : 20;
+            const avatarY = avatarPosition.includes('bottom') ? height - avatarSize - 20 : 20;
+            
+            // Draw avatar with rounded corners
+            ctx.save();
+            ctx.beginPath();
+            ctx.roundRect(avatarX, avatarY, avatarSize, avatarSize, 10);
+            ctx.clip();
+            ctx.drawImage(avatarImage, avatarX, avatarY, avatarSize, avatarSize);
+            ctx.restore();
+          }
 
-        if (progress < 1) {
-          requestAnimationFrame(animate);
+          // Draw captions
+          const currentCaption = captions.find(caption => 
+            elapsed >= caption.start && elapsed <= caption.end
+          );
+          
+          if (currentCaption) {
+            const fontSize = captionSettings.fontSize;
+            const fontWeight = captionSettings.fontWeight;
+            const textColor = captionSettings.color;
+            const bgColor = captionSettings.backgroundColor;
+            const bgOpacity = captionSettings.backgroundOpacity;
+            
+            ctx.font = `${fontWeight} ${fontSize}px Arial, sans-serif`;
+            ctx.textAlign = 'center';
+            
+            // Calculate text position
+            const textY = captionSettings.position === 'top' ? 100 : height - 100;
+            
+            // Measure text for background
+            const textMetrics = ctx.measureText(currentCaption.text);
+            const textWidth = textMetrics.width;
+            const textHeight = fontSize;
+            
+            // Draw background
+            ctx.fillStyle = `${bgColor}${Math.round(bgOpacity * 255).toString(16).padStart(2, '0')}`;
+            const padding = 20;
+            ctx.fillRect(
+              (width - textWidth) / 2 - padding,
+              textY - textHeight - padding / 2,
+              textWidth + padding * 2,
+              textHeight + padding
+            );
+            
+            // Draw text
+            ctx.fillStyle = textColor;
+            ctx.fillText(currentCaption.text, width / 2, textY);
+          }
+
+          // Update progress
+          const progress = 60 + (elapsed / audioDuration) * 30;
+          setCreationProgress(Math.min(progress, 90));
+          
+          // Continue animation
+          animationId = requestAnimationFrame(render);
         } else {
-          // Stop recording
+          // Recording complete
+          cancelAnimationFrame(animationId);
           mediaRecorder.stop();
-          source.stop();
-          audioContext.close();
         }
       };
 
-      animate();
+      // Start recording and rendering
+      mediaRecorder.start(100); // Collect data every 100ms for smoother recording
+      audio.play();
+      originalVideo.play();
+      
+      animationId = requestAnimationFrame(render);
 
       // Wait for recording to complete
       await new Promise<void>((resolve) => {
         mediaRecorder.onstop = () => {
-          setCreationStep('Finalizing video...');
-          setCreationProgress(90);
+          setCreationStage('Finalizing video...');
+          setCreationProgress(95);
           resolve();
         };
       });
 
       // Create final video blob
-      const finalVideoBlob = new Blob(recordedChunks, { type: 'video/mp4' });
+      const finalVideoBlob = new Blob(recordedChunks, {
+        type: selectedMimeType.includes('mp4') ? 'video/mp4' : 'video/webm'
+      });
 
-      setCreationStep('Saving to database...');
-      setCreationProgress(95);
+      setCreationStage('Saving to database...');
+      setCreationProgress(98);
+
+      // Generate social media content
+      await generateSocialMediaContent();
 
       // Save to database
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const filename = `fullclip-${selectedVideo.original_filename.replace(/\.[^/.]+$/, '')}-${timestamp}.mp4`;
-      
+      const displayName = selectedVideo.display_name || selectedVideo.original_filename.replace(/\.[^/.]+$/, '');
+
       await dbManager.saveFullClipVideo(
         filename,
         selectedVideo.original_filename,
         selectedVideo.file_language,
-        Math.max(selectedVideo.duration, audioDuration),
+        Math.round(audioDuration),
         finalVideoBlob,
         script,
         captions,
         selectedVideo.original_file_content,
-        selectedVideo.display_name || selectedVideo.original_filename
+        displayName
       );
 
       setCreationProgress(100);
-      setCreationStep('Complete!');
-      
-      // FIXED: Show success confirmation message
-      setSuccess(`🎬 FullClip video created successfully! 
-      
-✅ Audio narration included
-✅ Captions synchronized (${captions.length} segments)
-✅ Avatar positioned ${avatarPosition}
-${thumbnailFile ? '✅ Thumbnail intro (1 second)' : ''}
-✅ Saved to FullClip Gallery
+      setCreationStage('Complete!');
 
-Redirecting to gallery...`);
-      
-      // Cleanup
-      URL.revokeObjectURL(originalVideo.src);
-      URL.revokeObjectURL(avatarImg.src);
-      if (thumbnailImg) {
-        URL.revokeObjectURL(thumbnailImg.src);
-      }
-      
-      // FIXED: Navigate to FullClip Gallery after 2 seconds
+      // Clean up
+      URL.revokeObjectURL(originalVideoUrl);
+      URL.revokeObjectURL(audioUrl);
+      audioContext.close();
+
+      // Notify parent and close
       setTimeout(() => {
-        onVideoSaved?.();
+        onVideoSaved();
         onClose();
-      }, 2000);
-      
+      }, 1000);
+
     } catch (error) {
       console.error('Failed to create FullClip video:', error);
-      setError(`Failed to create FullClip video: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      alert(`Failed to create FullClip video: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsCreatingVideo(false);
       setCreationProgress(0);
-      setCreationStep('');
+      setCreationStage('');
     }
   };
 
-  const getAvatarImageUrl = (avatar: AvatarRecord): string => {
-    const blob = new Blob([avatar.image_data], { type: avatar.image_type });
-    return URL.createObjectURL(blob);
-  };
+  // Copy social media content to clipboard
+  const handleCopySocialContent = async (type: 'title' | 'description') => {
+    if (!socialMediaContent) return;
 
-  const isStepComplete = (step: number): boolean => {
-    switch (step) {
-      case 1: return !!audioBlob && !!script.trim();
-      case 2: return !!selectedAvatar;
-      case 3: return !!thumbnailFile;
-      case 4: return true; // Captions are optional
-      default: return false;
-    }
-  };
-
-  const canCreateVideo = (): boolean => {
-    return isStepComplete(1) && isStepComplete(2); // Steps 1 and 2 are required
-  };
-
-  // NEW: Get status icon for API keys
-  const getStatusIcon = (status: 'idle' | 'valid' | 'invalid', isLoading: boolean) => {
-    if (isLoading) return <Loader2 className="w-4 h-4 animate-spin text-blue-500" />;
-    
-    switch (status) {
-      case 'valid': return <CheckCircle className="w-4 h-4 text-green-500" />;
-      case 'invalid': return <AlertCircle className="w-4 h-4 text-red-500" />;
-      default: return null;
+    try {
+      const textToCopy = type === 'title' ? socialMediaContent.title : socialMediaContent.description;
+      await navigator.clipboard.writeText(textToCopy);
+      
+      // Show temporary success feedback
+      const originalText = type === 'title' ? socialMediaContent.title : socialMediaContent.description;
+      if (type === 'title') {
+        setSocialMediaContent(prev => prev ? { ...prev, title: '✓ Copied!' } : null);
+        setTimeout(() => {
+          setSocialMediaContent(prev => prev ? { ...prev, title: originalText } : null);
+        }, 1000);
+      } else {
+        setSocialMediaContent(prev => prev ? { ...prev, description: '✓ Copied to clipboard!' } : null);
+        setTimeout(() => {
+          setSocialMediaContent(prev => prev ? { ...prev, description: originalText } : null);
+        }, 1000);
+      }
+    } catch (error) {
+      console.error('Failed to copy to clipboard:', error);
     }
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/95 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-black border-2 border-white rounded-xl w-full max-w-7xl h-[95vh] flex flex-col">
-        {/* Hidden canvas for video composition */}
-        <canvas ref={canvasRef} className="hidden" />
-        
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b-2 border-white">
-          <div className="flex items-center gap-4">
-            <div className="p-2 border-2 border-white rounded-lg">
-              <FileAudio className="w-6 h-6 text-white" />
+    <div className="fixed inset-0 bg-black/95 backdrop-blur-sm z-50 flex items-center justify-center p-6">
+      <div className="bg-black border-2 border-white rounded-xl w-full max-w-7xl h-[90vh] flex">
+        {/* Left Sidebar - Controls */}
+        <div className="w-1/2 border-r-2 border-white flex flex-col">
+          {/* Header */}
+          <div className="p-6 border-b-2 border-white">
+            <div className="flex items-center justify-between">
+              <h2 className="text-3xl font-bold text-white flex items-center gap-3">
+                <div className="p-2 border-2 border-white rounded-lg">
+                  <Mic className="w-6 h-6 text-white" />
+                </div>
+                FullClip Studio
+              </h2>
+              <button
+                onClick={onClose}
+                className="p-3 hover:bg-white hover:text-black rounded-lg transition-colors border-2 border-white text-white"
+              >
+                <X className="w-6 h-6" />
+              </button>
             </div>
-            <div>
-              <h2 className="text-3xl font-bold text-white">FullClip Studio</h2>
-              <p className="text-gray-400 text-lg">Create complete social media videos</p>
-            </div>
+            
+            {selectedVideo && (
+              <div className="mt-4 p-4 bg-black border-2 border-white rounded-lg">
+                <h3 className="text-white font-bold text-lg mb-2">
+                  {selectedVideo.display_name || selectedVideo.original_filename}
+                </h3>
+                <div className="flex gap-4 text-sm text-gray-400">
+                  <span className="capitalize">{selectedVideo.file_language}</span>
+                  <span>{Math.floor(selectedVideo.duration / 60)}:{(selectedVideo.duration % 60).toString().padStart(2, '0')}</span>
+                </div>
+              </div>
+            )}
           </div>
-          
-          <button
-            onClick={onClose}
-            className="p-3 hover:bg-white hover:text-black rounded-lg transition-colors border-2 border-white text-white"
-          >
-            <X className="w-6 h-6" />
-          </button>
-        </div>
 
-        {/* Error/Success Messages */}
-        {error && (
-          <div className="mx-6 mt-4 bg-black border-2 border-red-500 rounded-lg p-4 flex items-center gap-3">
-            <AlertCircle className="w-6 h-6 text-red-500 flex-shrink-0" />
-            <span className="text-red-500 font-medium">{error}</span>
-            <button
-              onClick={() => setError(null)}
-              className="ml-auto text-red-500 hover:bg-red-500 hover:text-black p-1 rounded"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-        )}
-
-        {success && (
-          <div className="mx-6 mt-4 bg-black border-2 border-green-500 rounded-lg p-4 flex items-center gap-3">
-            <CheckCircle className="w-6 h-6 text-green-500 flex-shrink-0" />
-            <div className="text-green-500 font-medium whitespace-pre-line">{success}</div>
-            <button
-              onClick={() => setSuccess(null)}
-              className="ml-auto text-green-500 hover:bg-green-500 hover:text-black p-1 rounded"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-        )}
-
-        {/* Creation Progress */}
-        {isCreatingVideo && (
-          <div className="mx-6 mt-4 bg-black border-2 border-blue-500 rounded-lg p-4">
-            <div className="flex items-center gap-3 mb-3">
-              <Loader2 className="w-6 h-6 text-blue-500 animate-spin" />
-              <span className="text-blue-500 font-bold">Creating FullClip Video...</span>
-              <span className="text-white font-bold">{creationProgress}%</span>
-            </div>
-            <div className="w-full bg-gray-700 rounded-full h-3 mb-2">
-              <div 
-                className="bg-blue-500 h-3 rounded-full transition-all duration-300"
-                style={{ width: `${creationProgress}%` }}
-              />
-            </div>
-            <p className="text-gray-400 text-sm">{creationStep}</p>
-          </div>
-        )}
-
-        <div className="flex-1 flex overflow-hidden">
-          {/* Left Sidebar - Steps */}
-          <div className="w-1/2 border-r-2 border-white flex flex-col">
-            <div className="p-6 border-b-2 border-white">
-              <h3 className="text-2xl font-bold text-white mb-2">Production Steps</h3>
-              <p className="text-gray-400">Follow these steps to create your FullClip video</p>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              {/* API Settings - Collapsible */}
-              <div className="bg-black border-2 border-white rounded-xl p-4">
+          {/* Scrollable Content */}
+          <div className="flex-1 overflow-y-auto p-6 space-y-8">
+            {/* API Settings - Collapsible */}
+            <div className="bg-black border-2 border-white rounded-xl p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-bold text-white flex items-center gap-3">
+                  <Settings className="w-5 h-5" />
+                  API Settings
+                </h3>
                 <button
-                  onClick={() => setIsApiSettingsOpen(!isApiSettingsOpen)}
-                  className="w-full flex items-center justify-between text-white font-bold text-lg"
+                  onClick={() => setIsSettingsCollapsed(!isSettingsCollapsed)}
+                  className="text-white hover:bg-white hover:text-black p-2 rounded border-2 border-white transition-colors"
                 >
-                  <div className="flex items-center gap-3">
-                    <Settings className="w-5 h-5" />
-                    API Settings
-                  </div>
-                  {isApiSettingsOpen ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                  {isSettingsCollapsed ? '+' : '−'}
                 </button>
-                
-                {isApiSettingsOpen && (
-                  <div className="mt-4 space-y-4">
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <label className="text-white font-bold">XAI API Key</label>
-                        <div className="flex items-center gap-2">
-                          {getStatusIcon(xaiKeyStatus, isTestingXaiKey)}
-                          <button
-                            onClick={() => testXaiApiKey(xaiApiKey)}
-                            disabled={isTestingXaiKey || !xaiApiKey.trim()}
-                            className="text-sm bg-white hover:bg-gray-200 disabled:bg-gray-600 text-black px-3 py-1 rounded font-bold transition-colors"
-                          >
-                            {isTestingXaiKey ? 'Testing...' : 'Test'}
-                          </button>
-                        </div>
-                      </div>
-                      <input
-                        ref={xaiKeyInputRef}
-                        type="password"
-                        value={xaiApiKey}
-                        onChange={(e) => handleXaiKeyChange(e.target.value)}
-                        onKeyPress={handleXaiKeyPress}
-                        placeholder="Enter your XAI API key (Press Enter to test)"
-                        className="w-full p-3 bg-black border-2 border-white text-white rounded"
-                      />
-                      <p className="text-gray-400 text-sm mt-1">
-                        💡 Press Enter to test connection • {xaiKeyStatus === 'valid' ? '✅ Connected' : xaiKeyStatus === 'invalid' ? '❌ Invalid' : '⏳ Not tested'}
-                      </p>
-                    </div>
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <label className="text-white font-bold">ElevenLabs API Key</label>
-                        <div className="flex items-center gap-2">
-                          {getStatusIcon(elevenLabsKeyStatus, isTestingElevenLabsKey || isLoadingVoices)}
-                          <button
-                            onClick={() => testElevenLabsApiKey(elevenLabsApiKey)}
-                            disabled={isTestingElevenLabsKey || isLoadingVoices || !elevenLabsApiKey.trim()}
-                            className="text-sm bg-white hover:bg-gray-200 disabled:bg-gray-600 text-black px-3 py-1 rounded font-bold transition-colors"
-                          >
-                            {isTestingElevenLabsKey || isLoadingVoices ? 'Testing...' : 'Test'}
-                          </button>
-                        </div>
-                      </div>
-                      <input
-                        ref={elevenLabsKeyInputRef}
-                        type="password"
-                        value={elevenLabsApiKey}
-                        onChange={(e) => handleElevenLabsKeyChange(e.target.value)}
-                        onKeyPress={handleElevenLabsKeyPress}
-                        placeholder="Enter your ElevenLabs API key (Press Enter to test)"
-                        className="w-full p-3 bg-black border-2 border-white text-white rounded"
-                      />
-                      <p className="text-gray-400 text-sm mt-1">
-                        💡 Press Enter to test and load voices • {elevenLabsKeyStatus === 'valid' ? `✅ Connected (${voices.length} voices)` : elevenLabsKeyStatus === 'invalid' ? '❌ Invalid' : '⏳ Not tested'}
-                      </p>
-                    </div>
-                  </div>
-                )}
               </div>
 
-              {/* Step 1: Voice and Audio */}
-              <div className={`bg-black border-2 rounded-xl p-6 ${isStepComplete(1) ? 'border-green-500' : 'border-white'}`}>
-                <div className="flex items-center gap-3 mb-4">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${
-                    isStepComplete(1) ? 'bg-green-500 text-black' : 'bg-white text-black'
-                  }`}>
-                    {isStepComplete(1) ? '✓' : '1'}
+              {!isSettingsCollapsed && (
+                <div className="space-y-6">
+                  {/* XAI API Key */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-white font-bold">XAI API Key</label>
+                      <div className="flex items-center gap-2">
+                        {xaiKeyStatus === 'testing' && <Loader2 className="w-4 h-4 animate-spin text-white" />}
+                        {xaiKeyStatus === 'valid' && <CheckCircle className="w-4 h-4 text-green-400" />}
+                        {xaiKeyStatus === 'invalid' && <X className="w-4 h-4 text-red-400" />}
+                        <button
+                          onClick={() => testXaiApiKey(xaiApiKey)}
+                          disabled={xaiKeyStatus === 'testing'}
+                          className="text-xs bg-black border border-white text-white hover:bg-white hover:text-black 
+                                   px-2 py-1 rounded transition-colors disabled:opacity-50"
+                        >
+                          Test
+                        </button>
+                      </div>
+                    </div>
+                    <input
+                      type="password"
+                      value={xaiApiKey}
+                      onChange={(e) => setXaiApiKey(e.target.value)}
+                      onKeyPress={(e) => handleApiKeyKeyPress(e, 'xai')}
+                      placeholder="Enter XAI API key (press Enter to test)"
+                      className="w-full p-3 bg-black border-2 border-white text-white rounded"
+                    />
+                    <p className="text-xs text-gray-400 mt-1">
+                      {xaiKeyStatus === 'untested' && 'Not tested'}
+                      {xaiKeyStatus === 'testing' && 'Testing connection...'}
+                      {xaiKeyStatus === 'valid' && '✅ Valid - Ready for script generation'}
+                      {xaiKeyStatus === 'invalid' && '❌ Invalid - Please check your key'}
+                    </p>
                   </div>
-                  <h4 className="text-xl font-bold text-white">Voice & Audio Generation</h4>
-                </div>
 
-                {/* Voice Selection */}
-                <div className="mb-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="text-white font-bold">Select Voice</label>
-                    {isLoadingVoices && <Loader2 className="w-4 h-4 animate-spin text-blue-500" />}
+                  {/* ElevenLabs API Key */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-white font-bold">ElevenLabs API Key</label>
+                      <div className="flex items-center gap-2">
+                        {elevenLabsKeyStatus === 'testing' && <Loader2 className="w-4 h-4 animate-spin text-white" />}
+                        {elevenLabsKeyStatus === 'valid' && <CheckCircle className="w-4 h-4 text-green-400" />}
+                        {elevenLabsKeyStatus === 'invalid' && <X className="w-4 h-4 text-red-400" />}
+                        <button
+                          onClick={() => testElevenLabsApiKey(elevenLabsApiKey)}
+                          disabled={elevenLabsKeyStatus === 'testing'}
+                          className="text-xs bg-black border border-white text-white hover:bg-white hover:text-black 
+                                   px-2 py-1 rounded transition-colors disabled:opacity-50"
+                        >
+                          Test
+                        </button>
+                      </div>
+                    </div>
+                    <input
+                      type="password"
+                      value={elevenLabsApiKey}
+                      onChange={(e) => setElevenLabsApiKey(e.target.value)}
+                      onKeyPress={(e) => handleApiKeyKeyPress(e, 'elevenlabs')}
+                      placeholder="Enter ElevenLabs API key (press Enter to test)"
+                      className="w-full p-3 bg-black border-2 border-white text-white rounded"
+                    />
+                    <p className="text-xs text-gray-400 mt-1">
+                      {elevenLabsKeyStatus === 'untested' && 'Not tested'}
+                      {elevenLabsKeyStatus === 'testing' && 'Testing connection and loading voices...'}
+                      {elevenLabsKeyStatus === 'valid' && `✅ Valid - ${voices.length} voices available`}
+                      {elevenLabsKeyStatus === 'invalid' && '❌ Invalid - Please check your key'}
+                    </p>
                   </div>
-                  <select
-                    value={selectedVoice}
-                    onChange={(e) => setSelectedVoice(e.target.value)}
-                    className="w-full p-3 bg-black border-2 border-white text-white rounded"
-                    disabled={!elevenLabsApiKey || elevenLabsKeyStatus !== 'valid'}
-                  >
-                    <option value="">
-                      {elevenLabsKeyStatus !== 'valid' ? 'Connect ElevenLabs API first' : 'Choose a voice...'}
+                </div>
+              )}
+            </div>
+
+            {/* Voice Selection */}
+            <div className="bg-black border-2 border-white rounded-xl p-6">
+              <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-3">
+                <Volume2 className="w-5 h-5" />
+                Voice Selection
+              </h3>
+              
+              {isLoadingVoices ? (
+                <div className="flex items-center gap-3 text-white">
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span>Loading voices...</span>
+                </div>
+              ) : voices.length > 0 ? (
+                <select
+                  value={selectedVoice}
+                  onChange={(e) => setSelectedVoice(e.target.value)}
+                  className="w-full p-3 bg-black border-2 border-white text-white rounded"
+                >
+                  <option value="">Select a voice</option>
+                  {voices.map(voice => (
+                    <option key={voice.voice_id} value={voice.voice_id}>
+                      {voice.name} ({voice.category})
                     </option>
-                    {voices.map(voice => (
-                      <option key={voice.voice_id} value={voice.voice_id}>
-                        {voice.name} ({voice.category})
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                  ))}
+                </select>
+              ) : (
+                <p className="text-gray-400">No voices available. Please check your ElevenLabs API key.</p>
+              )}
+            </div>
 
-                {/* Script Generation */}
-                <div className="mb-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="text-white font-bold">AI Script</label>
-                    <button
-                      onClick={generateScript}
-                      disabled={xaiKeyStatus !== 'valid' || isGeneratingScript}
-                      className="bg-white hover:bg-gray-200 disabled:bg-gray-600 text-black px-4 py-2 rounded font-bold transition-colors"
-                    >
-                      {isGeneratingScript ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Generate'}
-                    </button>
-                  </div>
-                  <textarea
-                    value={script}
-                    onChange={(e) => setScript(e.target.value)}
-                    placeholder="AI will generate a voice-friendly script based on your code..."
-                    className="w-full p-3 bg-black border-2 border-white text-white rounded h-32 resize-none"
-                  />
-                  <p className="text-gray-400 text-sm mt-1">
-                    💡 Script is optimized for voice synthesis - no symbols or special characters
-                  </p>
-                </div>
+            {/* Script Generation */}
+            <div className="bg-black border-2 border-white rounded-xl p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-bold text-white flex items-center gap-3">
+                  <Mic className="w-5 h-5" />
+                  Script Generation
+                </h3>
+                <button
+                  onClick={generateScript}
+                  disabled={isGeneratingScript || xaiKeyStatus !== 'valid' || !selectedVideo}
+                  className="bg-white hover:bg-gray-200 disabled:bg-gray-600 text-black px-4 py-2 rounded font-bold 
+                           transition-colors border-2 border-white flex items-center gap-2 disabled:cursor-not-allowed"
+                >
+                  {isGeneratingScript ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <Mic className="w-4 h-4" />
+                      Generate Script
+                    </>
+                  )}
+                </button>
+              </div>
+              
+              <textarea
+                value={script}
+                onChange={(e) => setScript(e.target.value)}
+                placeholder="AI-generated script will appear here, or write your own..."
+                className="w-full h-32 p-3 bg-black border-2 border-white text-white rounded resize-none"
+              />
+              
+              {script && (
+                <p className="text-sm text-gray-400 mt-2">
+                  Script length: {script.length} characters (~{Math.ceil(script.split(' ').length / 3)} seconds)
+                </p>
+              )}
+            </div>
 
-                {/* Audio Generation */}
-                <div className="flex gap-3">
-                  <button
-                    onClick={generateAudio}
-                    disabled={elevenLabsKeyStatus !== 'valid' || !selectedVoice || !script.trim() || isGeneratingAudio}
-                    className="flex-1 bg-white hover:bg-gray-200 disabled:bg-gray-600 text-black px-4 py-3 rounded font-bold transition-colors flex items-center justify-center gap-2"
-                  >
-                    {isGeneratingAudio ? <Loader2 className="w-5 h-5 animate-spin" /> : <Mic className="w-5 h-5" />}
-                    {isGeneratingAudio ? 'Generating...' : 'Generate Audio'}
-                  </button>
-                  
-                  {audioUrl && (
+            {/* Audio Generation */}
+            <div className="bg-black border-2 border-white rounded-xl p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-bold text-white flex items-center gap-3">
+                  <Volume2 className="w-5 h-5" />
+                  Audio Generation
+                </h3>
+                <button
+                  onClick={generateAudio}
+                  disabled={isGeneratingAudio || !script.trim() || !selectedVoice || elevenLabsKeyStatus !== 'valid'}
+                  className="bg-white hover:bg-gray-200 disabled:bg-gray-600 text-black px-4 py-2 rounded font-bold 
+                           transition-colors border-2 border-white flex items-center gap-2 disabled:cursor-not-allowed"
+                >
+                  {isGeneratingAudio ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <Volume2 className="w-4 h-4" />
+                      Generate Audio
+                    </>
+                  )}
+                </button>
+              </div>
+              
+              {audioBlob && (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-4">
                     <button
-                      onClick={handleAudioPlayback}
-                      className="bg-black border-2 border-white text-white hover:bg-white hover:text-black px-4 py-3 rounded font-bold transition-colors flex items-center gap-2"
+                      onClick={toggleAudioPlayback}
+                      className="bg-black border-2 border-white text-white hover:bg-white hover:text-black 
+                               p-3 rounded transition-colors flex items-center gap-2"
                     >
                       {isPlayingAudio ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
-                    </button>
-                  )}
-                </div>
-
-                {audioUrl && (
-                  <audio
-                    ref={audioRef}
-                    src={audioUrl}
-                    onEnded={() => setIsPlayingAudio(false)}
-                    className="hidden"
-                  />
-                )}
-              </div>
-
-              {/* Step 2: Avatar Selection */}
-              <div className={`bg-black border-2 rounded-xl p-6 ${isStepComplete(2) ? 'border-green-500' : 'border-white'}`}>
-                <div className="flex items-center gap-3 mb-4">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${
-                    isStepComplete(2) ? 'bg-green-500 text-black' : 'bg-white text-black'
-                  }`}>
-                    {isStepComplete(2) ? '✓' : '2'}
-                  </div>
-                  <h4 className="text-xl font-bold text-white">Avatar Selection</h4>
-                </div>
-
-                {/* Avatar Upload */}
-                <div className="mb-4">
-                  <div className="flex gap-3 mb-4">
-                    <button
-                      onClick={() => avatarFileInputRef.current?.click()}
-                      disabled={isUploadingAvatar}
-                      className="flex-1 bg-white hover:bg-gray-200 disabled:bg-gray-600 text-black px-4 py-3 rounded font-bold transition-colors flex items-center justify-center gap-2"
-                    >
-                      {isUploadingAvatar ? <Loader2 className="w-5 h-5 animate-spin" /> : <Upload className="w-5 h-5" />}
-                      Upload Avatar
+                      {isPlayingAudio ? 'Pause' : 'Play'}
                     </button>
                     
-                    <button
-                      onClick={generateAIAvatar}
-                      disabled={xaiKeyStatus !== 'valid' || isGeneratingAvatar}
-                      className="flex-1 bg-black border-2 border-white text-white hover:bg-white hover:text-black px-4 py-3 rounded font-bold transition-colors flex items-center justify-center gap-2"
-                    >
-                      {isGeneratingAvatar ? <Loader2 className="w-5 h-5 animate-spin" /> : <User className="w-5 h-5" />}
-                      AI Generate
-                    </button>
+                    <div className="flex-1">
+                      <div className="bg-black border-2 border-white rounded-full h-2 overflow-hidden">
+                        <div 
+                          className="bg-white h-full transition-all duration-100"
+                          style={{ width: `${audioProgress}%` }}
+                        />
+                      </div>
+                    </div>
+                    
+                    <span className="text-white text-sm font-mono">
+                      {Math.floor(audioDuration / 60)}:{(Math.floor(audioDuration % 60)).toString().padStart(2, '0')}
+                    </span>
                   </div>
+                  
+                  <audio
+                    ref={audioRef}
+                    src={audioBlob ? URL.createObjectURL(audioBlob) : ''}
+                    onTimeUpdate={handleAudioTimeUpdate}
+                    onEnded={handleAudioEnded}
+                    className="hidden"
+                  />
+                </div>
+              )}
+            </div>
 
+            {/* Avatar Selection */}
+            <div className="bg-black border-2 border-white rounded-xl p-6">
+              <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-3">
+                <Upload className="w-5 h-5" />
+                Avatar Selection
+              </h3>
+              
+              {/* Avatar Upload */}
+              <div className="mb-6">
+                <div className="flex gap-3 mb-4">
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploadingAvatar}
+                    className="bg-white hover:bg-gray-200 disabled:bg-gray-600 text-black px-4 py-2 rounded font-bold 
+                             transition-colors border-2 border-white flex items-center gap-2 disabled:cursor-not-allowed"
+                  >
+                    {isUploadingAvatar ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Uploading...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-4 h-4" />
+                        Upload Image
+                      </>
+                    )}
+                  </button>
+                  
                   <input
-                    ref={avatarFileInputRef}
+                    ref={fileInputRef}
                     type="file"
                     accept="image/*"
                     onChange={handleAvatarUpload}
                     className="hidden"
                   />
                 </div>
-
-                {/* Avatar Gallery */}
-                {avatars.length > 0 && (
-                  <div className="mb-4">
-                    <label className="block text-white font-bold mb-2">Available Avatars</label>
-                    <div className="grid grid-cols-3 gap-3 max-h-48 overflow-y-auto">
-                      {avatars.map(avatar => (
-                        <button
-                          key={avatar.id}
-                          onClick={() => setSelectedAvatar(avatar)}
-                          className={`relative aspect-square rounded-lg overflow-hidden border-2 transition-all ${
-                            selectedAvatar?.id === avatar.id ? 'border-green-500' : 'border-white hover:border-gray-300'
-                          }`}
-                        >
-                          <img
-                            src={getAvatarImageUrl(avatar)}
-                            alt={avatar.name}
-                            className="w-full h-full object-cover"
-                          />
-                          {selectedAvatar?.id === avatar.id && (
-                            <div className="absolute inset-0 bg-green-500/20 flex items-center justify-center">
-                              <CheckCircle className="w-6 h-6 text-green-500" />
-                            </div>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Avatar Settings */}
-                {selectedAvatar && (
-                  <div className="space-y-3">
-                    <div>
-                      <label className="block text-white font-bold mb-2">Position</label>
-                      <select
-                        value={avatarPosition}
-                        onChange={(e) => setAvatarPosition(e.target.value as any)}
-                        className="w-full p-3 bg-black border-2 border-white text-white rounded"
-                      >
-                        <option value="top-left">Top Left</option>
-                        <option value="top-right">Top Right</option>
-                        <option value="bottom-left">Bottom Left</option>
-                        <option value="bottom-right">Bottom Right</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-white font-bold mb-2">Size: {avatarSize}px</label>
-                      <input
-                        type="range"
-                        min="80"
-                        max="200"
-                        value={avatarSize}
-                        onChange={(e) => setAvatarSize(Number(e.target.value))}
-                        className="w-full"
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Step 3: Thumbnail Upload */}
-              <div className={`bg-black border-2 rounded-xl p-6 ${isStepComplete(3) ? 'border-green-500' : 'border-white'}`}>
-                <div className="flex items-center gap-3 mb-4">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${
-                    isStepComplete(3) ? 'bg-green-500 text-black' : 'bg-white text-black'
-                  }`}>
-                    {isStepComplete(3) ? '✓' : '3'}
-                  </div>
-                  <h4 className="text-xl font-bold text-white">Thumbnail Upload</h4>
-                  <span className="text-gray-400 text-sm">(Optional)</span>
-                </div>
-
-                {!thumbnailFile ? (
+                
+                {/* AI Avatar Generation */}
+                <div className="flex gap-3">
+                  <input
+                    type="text"
+                    value={avatarPrompt}
+                    onChange={(e) => setAvatarPrompt(e.target.value)}
+                    placeholder="Describe your avatar (e.g., 'cool penguin with sunglasses')"
+                    className="flex-1 p-3 bg-black border-2 border-white text-white rounded"
+                  />
                   <button
-                    onClick={() => thumbnailFileInputRef.current?.click()}
-                    className="w-full bg-white hover:bg-gray-200 text-black px-4 py-8 rounded font-bold transition-colors flex flex-col items-center justify-center gap-3 border-2 border-dashed border-gray-400"
+                    onClick={generateAIAvatar}
+                    disabled={isGeneratingAvatar || !avatarPrompt.trim() || xaiKeyStatus !== 'valid'}
+                    className="bg-white hover:bg-gray-200 disabled:bg-gray-600 text-black px-4 py-2 rounded font-bold 
+                             transition-colors border-2 border-white flex items-center gap-2 disabled:cursor-not-allowed"
                   >
-                    <ImageIcon className="w-8 h-8" />
-                    <span>Upload Thumbnail Image</span>
-                    <span className="text-sm opacity-75">Shows for 1 second at video start</span>
+                    {isGeneratingAvatar ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      'Generate'
+                    )}
                   </button>
-                ) : (
-                  <div className="space-y-3">
-                    <div className="relative">
-                      <img
-                        src={thumbnailPreview}
-                        alt="Thumbnail preview"
-                        className="w-full max-h-48 object-cover rounded border-2 border-white"
-                      />
-                      <button
-                        onClick={removeThumbnail}
-                        className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white p-2 rounded-full transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                    <p className="text-gray-400 text-sm">{thumbnailFile.name}</p>
-                  </div>
-                )}
-
-                <input
-                  ref={thumbnailFileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleThumbnailUpload}
-                  className="hidden"
-                />
-              </div>
-
-              {/* Step 4: Captions */}
-              <div className={`bg-black border-2 rounded-xl p-6 ${isStepComplete(4) ? 'border-green-500' : 'border-white'}`}>
-                <div className="flex items-center gap-3 mb-4">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${
-                    isStepComplete(4) ? 'bg-green-500 text-black' : 'bg-white text-black'
-                  }`}>
-                    {isStepComplete(4) ? '✓' : '4'}
-                  </div>
-                  <h4 className="text-xl font-bold text-white">Captions</h4>
                 </div>
-
-                <div className="space-y-4">
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
-                      id="captions-enabled"
-                      checked={captionsEnabled}
-                      onChange={(e) => setCaptionsEnabled(e.target.checked)}
-                      className="w-5 h-5"
+              </div>
+              
+              {/* Avatar Grid */}
+              <div className="grid grid-cols-4 gap-3 mb-6">
+                {avatars.map(avatar => (
+                  <button
+                    key={avatar.id}
+                    onClick={() => setSelectedAvatar(avatar)}
+                    className={`relative aspect-square rounded-lg overflow-hidden border-2 transition-all ${
+                      selectedAvatar?.id === avatar.id 
+                        ? 'border-white bg-white' 
+                        : 'border-gray-600 hover:border-white'
+                    }`}
+                  >
+                    <img
+                      src={avatar.url}
+                      alt={avatar.name}
+                      className="w-full h-full object-cover"
                     />
-                    <label htmlFor="captions-enabled" className="text-white font-bold">
-                      Enable Synchronized Captions
-                    </label>
+                    {avatar.type === 'generated' && (
+                      <div className="absolute top-1 right-1 bg-black text-white text-xs px-1 rounded">
+                        AI
+                      </div>
+                    )}
+                  </button>
+                ))}
+              </div>
+              
+              {/* Avatar Settings */}
+              {selectedAvatar && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-white font-bold mb-2">Position</label>
+                    <select
+                      value={avatarPosition}
+                      onChange={(e) => setAvatarPosition(e.target.value as any)}
+                      className="w-full p-3 bg-black border-2 border-white text-white rounded"
+                    >
+                      <option value="top-left">Top Left</option>
+                      <option value="top-right">Top Right</option>
+                      <option value="bottom-left">Bottom Left</option>
+                      <option value="bottom-right">Bottom Right</option>
+                    </select>
                   </div>
+                  
+                  <div>
+                    <label className="block text-white font-bold mb-2">Size: {avatarSize}px</label>
+                    <input
+                      type="range"
+                      min="80"
+                      max="200"
+                      value={avatarSize}
+                      onChange={(e) => setAvatarSize(Number(e.target.value))}
+                      className="w-full"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
 
-                  {captionsEnabled && (
-                    <div className="space-y-3">
-                      <div>
-                        <label className="block text-white font-bold mb-2">Font Size</label>
-                        <input
-                          type="range"
-                          min="16"
-                          max="32"
-                          value={captionStyle.fontSize}
-                          onChange={(e) => setCaptionStyle(prev => ({ ...prev, fontSize: Number(e.target.value) }))}
-                          className="w-full"
-                        />
-                        <span className="text-gray-400 text-sm">{captionStyle.fontSize}px</span>
-                      </div>
-                      <div>
-                        <label className="block text-white font-bold mb-2">Text Color</label>
-                        <input
-                          type="color"
-                          value={captionStyle.color}
-                          onChange={(e) => setCaptionStyle(prev => ({ ...prev, color: e.target.value }))}
-                          className="w-full h-10 rounded border-2 border-white"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-white font-bold mb-2">Background Color</label>
-                        <input
-                          type="color"
-                          value={captionStyle.backgroundColor}
-                          onChange={(e) => setCaptionStyle(prev => ({ ...prev, backgroundColor: e.target.value }))}
-                          className="w-full h-10 rounded border-2 border-white"
-                        />
-                      </div>
-                      <p className="text-gray-400 text-sm">
-                        💡 Captions are automatically synchronized with the audio timing
-                      </p>
-                    </div>
-                  )}
+            {/* Caption Settings */}
+            <div className="bg-black border-2 border-white rounded-xl p-6">
+              <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-3">
+                <Captions className="w-5 h-5" />
+                Caption Settings
+              </h3>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-white font-bold mb-2">Font Size</label>
+                  <input
+                    type="range"
+                    min="16"
+                    max="32"
+                    value={captionSettings.fontSize}
+                    onChange={(e) => setCaptionSettings(prev => ({ ...prev, fontSize: Number(e.target.value) }))}
+                    className="w-full"
+                  />
+                  <span className="text-gray-400 text-sm">{captionSettings.fontSize}px</span>
+                </div>
+                
+                <div>
+                  <label className="block text-white font-bold mb-2">Position</label>
+                  <select
+                    value={captionSettings.position}
+                    onChange={(e) => setCaptionSettings(prev => ({ ...prev, position: e.target.value as 'top' | 'bottom' }))}
+                    className="w-full p-2 bg-black border-2 border-white text-white rounded"
+                  >
+                    <option value="top">Top</option>
+                    <option value="bottom">Bottom</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-white font-bold mb-2">Text Color</label>
+                  <input
+                    type="color"
+                    value={captionSettings.color}
+                    onChange={(e) => setCaptionSettings(prev => ({ ...prev, color: e.target.value }))}
+                    className="w-full h-10 rounded border-2 border-white"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-white font-bold mb-2">Background</label>
+                  <input
+                    type="color"
+                    value={captionSettings.backgroundColor}
+                    onChange={(e) => setCaptionSettings(prev => ({ ...prev, backgroundColor: e.target.value }))}
+                    className="w-full h-10 rounded border-2 border-white"
+                  />
                 </div>
               </div>
+            </div>
 
-              {/* Create Video Button */}
+            {/* Create Video Button */}
+            <div className="bg-black border-2 border-white rounded-xl p-6">
               <button
                 onClick={createFullClipVideo}
-                disabled={!canCreateVideo() || isCreatingVideo}
-                className="w-full bg-white hover:bg-gray-200 disabled:bg-gray-600 text-black px-6 py-4 rounded-lg font-bold text-xl transition-colors flex items-center justify-center gap-3"
+                disabled={isCreatingVideo || !selectedVideo || !audioBlob || !script}
+                className="w-full bg-white hover:bg-gray-200 disabled:bg-gray-600 text-black py-4 px-6 rounded-lg font-bold text-xl
+                         transition-colors border-2 border-white flex items-center justify-center gap-3 disabled:cursor-not-allowed"
               >
                 {isCreatingVideo ? (
                   <>
                     <Loader2 className="w-6 h-6 animate-spin" />
-                    Creating FullClip... {creationProgress}%
+                    Creating FullClip... {Math.round(creationProgress)}%
                   </>
                 ) : (
                   <>
-                    <Film className="w-6 h-6" />
+                    <CheckCircle className="w-6 h-6" />
                     Create FullClip Video
                   </>
                 )}
               </button>
-            </div>
-          </div>
-
-          {/* Right Sidebar - Video Preview */}
-          <div className="w-1/2 flex flex-col">
-            <div className="p-6 border-b-2 border-white">
-              <h3 className="text-2xl font-bold text-white">Video Preview</h3>
-              <p className="text-gray-400">Preview your original video</p>
-            </div>
-            
-            <div className="flex-1 overflow-y-auto">
-              <div className="flex items-center justify-center p-8 min-h-full">
-                {selectedVideo ? (
-                  <div className="w-full max-w-lg">
-                    <div className="relative">
-                      <video
-                        ref={videoRef}
-                        controls
-                        className="w-full bg-black rounded-lg border-2 border-white"
-                        style={{ aspectRatio: '9/16' }}
-                        src={URL.createObjectURL(new Blob([selectedVideo.video_blob], { type: 'video/mp4' }))}
-                      />
-                      
-                      {/* Avatar Preview Overlay */}
-                      {selectedAvatar && (
-                        <div 
-                          className={`absolute w-16 h-16 rounded-full overflow-hidden border-2 border-white ${
-                            avatarPosition === 'top-left' ? 'top-4 left-4' :
-                            avatarPosition === 'top-right' ? 'top-4 right-4' :
-                            avatarPosition === 'bottom-left' ? 'bottom-4 left-4' :
-                            'bottom-4 right-4'
-                          }`}
-                          style={{ width: `${avatarSize * 0.3}px`, height: `${avatarSize * 0.3}px` }}
-                        >
-                          <img
-                            src={getAvatarImageUrl(selectedAvatar)}
-                            alt="Avatar preview"
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                      )}
-                    </div>
-                    
-                    <div className="mt-6 text-center">
-                      <h4 className="font-bold text-xl text-white mb-2">
-                        {selectedVideo.display_name || selectedVideo.original_filename}
-                      </h4>
-                      <div className="flex justify-center gap-6 text-gray-400 font-medium">
-                        <span className="capitalize">{selectedVideo.file_language}</span>
-                        <span>{Math.round(selectedVideo.duration)}s</span>
-                      </div>
-                    </div>
+              
+              {isCreatingVideo && (
+                <div className="mt-4">
+                  <div className="bg-black border-2 border-white rounded-full h-3 overflow-hidden">
+                    <div 
+                      className="bg-white h-full transition-all duration-300"
+                      style={{ width: `${creationProgress}%` }}
+                    />
                   </div>
-                ) : (
-                  <div className="text-center text-gray-400">
-                    <Film className="w-20 h-20 mx-auto mb-6 opacity-50" />
-                    <p className="text-2xl font-bold">No video selected</p>
-                    <p className="text-lg mt-2">Select a video from the gallery to get started</p>
-                  </div>
-                )}
-              </div>
+                  <p className="text-center text-white mt-2 font-medium">{creationStage}</p>
+                </div>
+              )}
             </div>
           </div>
         </div>
+
+        {/* Right Sidebar - Preview */}
+        <div className="w-1/2 flex flex-col">
+          <div className="p-6 border-b-2 border-white">
+            <h3 className="text-2xl font-bold text-white">Preview</h3>
+          </div>
+          
+          <div className="flex-1 flex items-center justify-center p-6">
+            {selectedVideo ? (
+              <div className="w-full max-w-md">
+                <video
+                  ref={videoRef}
+                  controls
+                  className="w-full bg-black rounded-lg border-2 border-white"
+                  style={{ aspectRatio: '9/16' }}
+                  src={URL.createObjectURL(new Blob([selectedVideo.video_blob], { type: 'video/mp4' }))}
+                />
+                
+                <div className="mt-6 text-center">
+                  <h4 className="font-bold text-xl text-white mb-2">
+                    {selectedVideo.display_name || selectedVideo.original_filename}
+                  </h4>
+                  <div className="flex justify-center gap-4 text-gray-400 mb-4">
+                    <span className="capitalize">{selectedVideo.file_language}</span>
+                    <span>{Math.floor(selectedVideo.duration / 60)}:{(selectedVideo.duration % 60).toString().padStart(2, '0')}</span>
+                  </div>
+                  
+                  <p className="text-gray-400 text-sm">
+                    This is your original video. The FullClip will include audio narration, captions, and avatar overlay.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center text-gray-400">
+                <Mic className="w-20 h-20 mx-auto mb-6 opacity-50" />
+                <p className="text-2xl font-bold">No video selected</p>
+                <p className="text-lg mt-2">Select a video from the gallery to create a FullClip</p>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
+
+      {/* Hidden canvas for video recording */}
+      <canvas
+        ref={canvasRef}
+        className="hidden"
+        width={720}
+        height={1280}
+      />
     </div>
   );
 };
