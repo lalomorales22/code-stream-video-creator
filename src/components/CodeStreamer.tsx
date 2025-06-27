@@ -7,7 +7,7 @@ interface CodeStreamerProps {
   isStreaming: boolean;
   speed: number;
   isRecording?: boolean;
-  onRecordingData?: (blob: Blob, duration: number) => void;
+  onRecordingData?: (blob: Blob, duration: number, mimeType: string) => void; // UPDATED: Added mimeType parameter
   colorScheme: ColorScheme;
 }
 
@@ -26,6 +26,7 @@ const CodeStreamer = forwardRef<HTMLDivElement, CodeStreamerProps>(
     const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
     const scrollPositionRef = useRef<number>(0);
     const intervalRef = useRef<NodeJS.Timeout | null>(null);
+    const selectedMimeTypeRef = useRef<string>('video/mp4'); // NEW: Store the selected MIME type
 
     // Recording timer effect
     useEffect(() => {
@@ -438,7 +439,7 @@ const CodeStreamer = forwardRef<HTMLDivElement, CodeStreamerProps>(
       };
     }, [file, displayedContent, isStreaming, currentIndex, isPaused, colorScheme, isRecording, recordingTime]);
 
-    // FIXED: Recording control with proper MP4 output
+    // UPDATED: Recording control with proper MIME type handling
     useEffect(() => {
       if (!canvasRef.current) return;
 
@@ -469,6 +470,9 @@ const CodeStreamer = forwardRef<HTMLDivElement, CodeStreamerProps>(
           }
         }
 
+        // Store the selected MIME type for later use
+        selectedMimeTypeRef.current = selectedMimeType;
+
         const mediaRecorder = new MediaRecorder(stream, {
           mimeType: selectedMimeType,
           videoBitsPerSecond: 8000000, // 8 Mbps for very high quality
@@ -488,17 +492,18 @@ const CodeStreamer = forwardRef<HTMLDivElement, CodeStreamerProps>(
           
           // Create blob with proper MIME type for MP4 compatibility
           const blob = new Blob(recordedChunksRef.current, {
-            type: selectedMimeType.includes('mp4') ? 'video/mp4' : 'video/webm'
+            type: selectedMimeTypeRef.current.includes('mp4') ? 'video/mp4' : 'video/webm'
           });
           
           console.log('Recording complete:', {
             duration,
             size: blob.size,
             type: blob.type,
-            codec: selectedMimeType
+            codec: selectedMimeTypeRef.current
           });
           
-          onRecordingData?.(blob, duration);
+          // UPDATED: Pass the MIME type to the callback
+          onRecordingData?.(blob, duration, selectedMimeTypeRef.current);
           recordedChunksRef.current = [];
         };
 

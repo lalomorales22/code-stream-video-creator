@@ -9,7 +9,8 @@ export interface VideoRecord {
   created_at: string;
   video_blob: Uint8Array;
   original_file_content: string;
-  display_name?: string; // NEW: For custom user-friendly names
+  display_name?: string;
+  video_mime_type: string; // NEW: Store the actual MIME type
 }
 
 export interface FullClipVideoRecord {
@@ -23,7 +24,8 @@ export interface FullClipVideoRecord {
   script: string;
   captions: string; // JSON string of caption segments
   original_file_content: string;
-  display_name?: string; // NEW: For custom user-friendly names
+  display_name?: string;
+  video_mime_type: string; // NEW: Store the actual MIME type
 }
 
 export interface ShortsVideoRecord {
@@ -38,7 +40,8 @@ export interface ShortsVideoRecord {
   avatar_position: string;
   avatar_size: number;
   original_file_content: string;
-  display_name?: string; // NEW: For custom user-friendly names
+  display_name?: string;
+  video_mime_type: string; // NEW: Store the actual MIME type
 }
 
 // NEW: Avatar storage interface
@@ -100,12 +103,14 @@ class DatabaseManager {
 
   private createTables() {
     try {
-      // Check if display_name column exists in videos table
+      // Check if columns exist in videos table
       const videosTableInfo = this.db.exec("PRAGMA table_info(videos)");
       const hasDisplayNameColumn = videosTableInfo.length > 0 && 
         videosTableInfo[0].values.some((row: any[]) => row[1] === 'display_name');
       const hasFileContentColumn = videosTableInfo.length > 0 && 
         videosTableInfo[0].values.some((row: any[]) => row[1] === 'original_file_content');
+      const hasMimeTypeColumn = videosTableInfo.length > 0 && 
+        videosTableInfo[0].values.some((row: any[]) => row[1] === 'video_mime_type');
 
       // Original videos table
       const createVideosTableSQL = `
@@ -118,7 +123,8 @@ class DatabaseManager {
           created_at TEXT NOT NULL,
           video_blob BLOB NOT NULL,
           original_file_content TEXT,
-          display_name TEXT
+          display_name TEXT,
+          video_mime_type TEXT DEFAULT 'video/mp4'
         );
       `;
 
@@ -141,12 +147,23 @@ class DatabaseManager {
         }
       }
 
+      if (!hasMimeTypeColumn) {
+        try {
+          this.db.run('ALTER TABLE videos ADD COLUMN video_mime_type TEXT DEFAULT \'video/mp4\'');
+          console.log('Added video_mime_type column to videos table');
+        } catch (error) {
+          console.log('Creating videos table with video_mime_type column');
+        }
+      }
+
       // Check columns for fullclip_videos table
       const fullclipTableInfo = this.db.exec("PRAGMA table_info(fullclip_videos)");
       const hasFullclipFileContentColumn = fullclipTableInfo.length > 0 && 
         fullclipTableInfo[0].values.some((row: any[]) => row[1] === 'original_file_content');
       const hasFullclipDisplayNameColumn = fullclipTableInfo.length > 0 && 
         fullclipTableInfo[0].values.some((row: any[]) => row[1] === 'display_name');
+      const hasFullclipMimeTypeColumn = fullclipTableInfo.length > 0 && 
+        fullclipTableInfo[0].values.some((row: any[]) => row[1] === 'video_mime_type');
 
       // FullClip videos table
       const createFullClipVideosTableSQL = `
@@ -161,7 +178,8 @@ class DatabaseManager {
           script TEXT,
           captions TEXT,
           original_file_content TEXT,
-          display_name TEXT
+          display_name TEXT,
+          video_mime_type TEXT DEFAULT 'video/mp4'
         );
       `;
 
@@ -183,10 +201,21 @@ class DatabaseManager {
         }
       }
 
+      if (!hasFullclipMimeTypeColumn) {
+        try {
+          this.db.run('ALTER TABLE fullclip_videos ADD COLUMN video_mime_type TEXT DEFAULT \'video/mp4\'');
+          console.log('Added video_mime_type column to fullclip_videos table');
+        } catch (error) {
+          console.log('Creating fullclip_videos table with video_mime_type column');
+        }
+      }
+
       // Check columns for shorts_videos table
       const shortsTableInfo = this.db.exec("PRAGMA table_info(shorts_videos)");
       const hasShortsDisplayNameColumn = shortsTableInfo.length > 0 && 
         shortsTableInfo[0].values.some((row: any[]) => row[1] === 'display_name');
+      const hasShortsMimeTypeColumn = shortsTableInfo.length > 0 && 
+        shortsTableInfo[0].values.some((row: any[]) => row[1] === 'video_mime_type');
 
       // Shorts videos table
       const createShortsVideosTableSQL = `
@@ -202,7 +231,8 @@ class DatabaseManager {
           avatar_position TEXT NOT NULL,
           avatar_size INTEGER NOT NULL,
           original_file_content TEXT,
-          display_name TEXT
+          display_name TEXT,
+          video_mime_type TEXT DEFAULT 'video/mp4'
         );
       `;
 
@@ -212,6 +242,15 @@ class DatabaseManager {
           console.log('Added display_name column to shorts_videos table');
         } catch (error) {
           console.log('Creating shorts_videos table with display_name column');
+        }
+      }
+
+      if (!hasShortsMimeTypeColumn) {
+        try {
+          this.db.run('ALTER TABLE shorts_videos ADD COLUMN video_mime_type TEXT DEFAULT \'video/mp4\'');
+          console.log('Added video_mime_type column to shorts_videos table');
+        } catch (error) {
+          console.log('Creating shorts_videos table with video_mime_type column');
         }
       }
 
@@ -299,7 +338,7 @@ class DatabaseManager {
     }
   }
 
-  // FIXED: Updated saveVideo method to include display_name
+  // UPDATED: saveVideo method to include video_mime_type
   async saveVideo(
     filename: string,
     originalFilename: string,
@@ -307,11 +346,12 @@ class DatabaseManager {
     duration: number,
     videoBlob: Blob,
     originalFileContent: string = '',
-    displayName: string = '' // NEW: Custom display name
+    displayName: string = '',
+    videoMimeType: string = 'video/mp4' // NEW: MIME type parameter
   ): Promise<number> {
     try {
       await this.initialize();
-      console.log('Saving video:', { filename, originalFilename, language, duration, blobSize: videoBlob.size, displayName });
+      console.log('Saving video:', { filename, originalFilename, language, duration, blobSize: videoBlob.size, displayName, videoMimeType });
 
       const arrayBuffer = await videoBlob.arrayBuffer();
       const uint8Array = new Uint8Array(arrayBuffer);
@@ -320,11 +360,11 @@ class DatabaseManager {
       console.log('Video blob converted to Uint8Array, size:', uint8Array.length);
 
       const stmt = this.db.prepare(`
-        INSERT INTO videos (filename, original_filename, file_language, duration, created_at, video_blob, original_file_content, display_name)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO videos (filename, original_filename, file_language, duration, created_at, video_blob, original_file_content, display_name, video_mime_type)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
-      stmt.run([filename, originalFilename, language, duration, createdAt, uint8Array, originalFileContent, displayName]);
+      stmt.run([filename, originalFilename, language, duration, createdAt, uint8Array, originalFileContent, displayName, videoMimeType]);
       
       // Get the inserted ID
       const result = this.db.exec("SELECT last_insert_rowid()");
@@ -333,7 +373,7 @@ class DatabaseManager {
       stmt.free();
       await this.saveDatabase();
 
-      console.log('Video saved successfully with ID:', videoId, 'and display name:', displayName);
+      console.log('Video saved successfully with ID:', videoId, 'display name:', displayName, 'MIME type:', videoMimeType);
       return videoId;
     } catch (error) {
       console.error('Failed to save video:', error);
@@ -347,7 +387,7 @@ class DatabaseManager {
       console.log('Loading all videos...');
 
       const result = this.db.exec(`
-        SELECT id, filename, original_filename, file_language, duration, created_at, video_blob, original_file_content, display_name
+        SELECT id, filename, original_filename, file_language, duration, created_at, video_blob, original_file_content, display_name, video_mime_type
         FROM videos
         ORDER BY created_at DESC
       `);
@@ -370,7 +410,8 @@ class DatabaseManager {
           created_at: row[5] as string,
           video_blob: row[6] as Uint8Array,
           original_file_content: (row[7] as string) || '',
-          display_name: (row[8] as string) || ''
+          display_name: (row[8] as string) || '',
+          video_mime_type: (row[9] as string) || 'video/mp4' // NEW: Include MIME type
         };
         videos.push(video);
       }
@@ -388,7 +429,7 @@ class DatabaseManager {
       await this.initialize();
 
       const result = this.db.exec(`
-        SELECT id, filename, original_filename, file_language, duration, created_at, video_blob, original_file_content, display_name
+        SELECT id, filename, original_filename, file_language, duration, created_at, video_blob, original_file_content, display_name, video_mime_type
         FROM videos
         WHERE id = ?
       `, [id]);
@@ -407,7 +448,8 @@ class DatabaseManager {
         created_at: row[5] as string,
         video_blob: row[6] as Uint8Array,
         original_file_content: (row[7] as string) || '',
-        display_name: (row[8] as string) || ''
+        display_name: (row[8] as string) || '',
+        video_mime_type: (row[9] as string) || 'video/mp4' // NEW: Include MIME type
       };
 
       return video;
@@ -435,7 +477,7 @@ class DatabaseManager {
     }
   }
 
-  // FIXED: Updated saveFullClipVideo method to include display_name
+  // UPDATED: saveFullClipVideo method to include video_mime_type
   async saveFullClipVideo(
     filename: string,
     originalFilename: string,
@@ -445,11 +487,12 @@ class DatabaseManager {
     script: string,
     captions: any[],
     originalFileContent: string = '',
-    displayName: string = '' // NEW: Custom display name
+    displayName: string = '',
+    videoMimeType: string = 'video/mp4' // NEW: MIME type parameter
   ): Promise<number> {
     try {
       await this.initialize();
-      console.log('Saving FullClip video:', { filename, originalFilename, language, duration, blobSize: videoBlob.size, displayName });
+      console.log('Saving FullClip video:', { filename, originalFilename, language, duration, blobSize: videoBlob.size, displayName, videoMimeType });
 
       const arrayBuffer = await videoBlob.arrayBuffer();
       const uint8Array = new Uint8Array(arrayBuffer);
@@ -459,11 +502,11 @@ class DatabaseManager {
       console.log('FullClip video blob converted to Uint8Array, size:', uint8Array.length);
 
       const stmt = this.db.prepare(`
-        INSERT INTO fullclip_videos (filename, original_filename, file_language, duration, created_at, video_blob, script, captions, original_file_content, display_name)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO fullclip_videos (filename, original_filename, file_language, duration, created_at, video_blob, script, captions, original_file_content, display_name, video_mime_type)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
-      stmt.run([filename, originalFilename, language, duration, createdAt, uint8Array, script, captionsJson, originalFileContent, displayName]);
+      stmt.run([filename, originalFilename, language, duration, createdAt, uint8Array, script, captionsJson, originalFileContent, displayName, videoMimeType]);
       
       // Get the inserted ID
       const result = this.db.exec("SELECT last_insert_rowid()");
@@ -472,7 +515,7 @@ class DatabaseManager {
       stmt.free();
       await this.saveDatabase();
 
-      console.log('FullClip video saved successfully with ID:', videoId, 'and display name:', displayName);
+      console.log('FullClip video saved successfully with ID:', videoId, 'display name:', displayName, 'MIME type:', videoMimeType);
       return videoId;
     } catch (error) {
       console.error('Failed to save FullClip video:', error);
@@ -486,7 +529,7 @@ class DatabaseManager {
       console.log('Loading all FullClip videos...');
 
       const result = this.db.exec(`
-        SELECT id, filename, original_filename, file_language, duration, created_at, video_blob, script, captions, original_file_content, display_name
+        SELECT id, filename, original_filename, file_language, duration, created_at, video_blob, script, captions, original_file_content, display_name, video_mime_type
         FROM fullclip_videos
         ORDER BY created_at DESC
       `);
@@ -511,7 +554,8 @@ class DatabaseManager {
           script: row[7] as string,
           captions: row[8] as string,
           original_file_content: (row[9] as string) || '',
-          display_name: (row[10] as string) || ''
+          display_name: (row[10] as string) || '',
+          video_mime_type: (row[11] as string) || 'video/mp4' // NEW: Include MIME type
         };
         videos.push(video);
       }
@@ -529,7 +573,7 @@ class DatabaseManager {
       await this.initialize();
 
       const result = this.db.exec(`
-        SELECT id, filename, original_filename, file_language, duration, created_at, video_blob, script, captions, original_file_content, display_name
+        SELECT id, filename, original_filename, file_language, duration, created_at, video_blob, script, captions, original_file_content, display_name, video_mime_type
         FROM fullclip_videos
         WHERE id = ?
       `, [id]);
@@ -550,7 +594,8 @@ class DatabaseManager {
         script: row[7] as string,
         captions: row[8] as string,
         original_file_content: (row[9] as string) || '',
-        display_name: (row[10] as string) || ''
+        display_name: (row[10] as string) || '',
+        video_mime_type: (row[11] as string) || 'video/mp4' // NEW: Include MIME type
       };
 
       return video;
@@ -578,7 +623,7 @@ class DatabaseManager {
     }
   }
 
-  // FIXED: Updated saveShortsVideo method to include display_name
+  // UPDATED: saveShortsVideo method to include video_mime_type
   async saveShortsVideo(
     filename: string,
     originalFilename: string,
@@ -589,11 +634,12 @@ class DatabaseManager {
     avatarPosition: string,
     avatarSize: number,
     originalFileContent: string = '',
-    displayName: string = '' // NEW: Custom display name
+    displayName: string = '',
+    videoMimeType: string = 'video/mp4' // NEW: MIME type parameter
   ): Promise<number> {
     try {
       await this.initialize();
-      console.log('Saving Shorts video:', { filename, originalFilename, language, duration, blobSize: videoBlob.size, displayName });
+      console.log('Saving Shorts video:', { filename, originalFilename, language, duration, blobSize: videoBlob.size, displayName, videoMimeType });
 
       const arrayBuffer = await videoBlob.arrayBuffer();
       const uint8Array = new Uint8Array(arrayBuffer);
@@ -602,11 +648,11 @@ class DatabaseManager {
       console.log('Shorts video blob converted to Uint8Array, size:', uint8Array.length);
 
       const stmt = this.db.prepare(`
-        INSERT INTO shorts_videos (filename, original_filename, file_language, duration, created_at, video_blob, avatar_type, avatar_position, avatar_size, original_file_content, display_name)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO shorts_videos (filename, original_filename, file_language, duration, created_at, video_blob, avatar_type, avatar_position, avatar_size, original_file_content, display_name, video_mime_type)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
-      stmt.run([filename, originalFilename, language, duration, createdAt, uint8Array, avatarType, avatarPosition, avatarSize, originalFileContent, displayName]);
+      stmt.run([filename, originalFilename, language, duration, createdAt, uint8Array, avatarType, avatarPosition, avatarSize, originalFileContent, displayName, videoMimeType]);
       
       // Get the inserted ID
       const result = this.db.exec("SELECT last_insert_rowid()");
@@ -615,7 +661,7 @@ class DatabaseManager {
       stmt.free();
       await this.saveDatabase();
 
-      console.log('Shorts video saved successfully with ID:', videoId, 'and display name:', displayName);
+      console.log('Shorts video saved successfully with ID:', videoId, 'display name:', displayName, 'MIME type:', videoMimeType);
       return videoId;
     } catch (error) {
       console.error('Failed to save Shorts video:', error);
@@ -629,7 +675,7 @@ class DatabaseManager {
       console.log('Loading all Shorts videos...');
 
       const result = this.db.exec(`
-        SELECT id, filename, original_filename, file_language, duration, created_at, video_blob, avatar_type, avatar_position, avatar_size, original_file_content, display_name
+        SELECT id, filename, original_filename, file_language, duration, created_at, video_blob, avatar_type, avatar_position, avatar_size, original_file_content, display_name, video_mime_type
         FROM shorts_videos
         ORDER BY created_at DESC
       `);
@@ -655,7 +701,8 @@ class DatabaseManager {
           avatar_position: row[8] as string,
           avatar_size: row[9] as number,
           original_file_content: (row[10] as string) || '',
-          display_name: (row[11] as string) || ''
+          display_name: (row[11] as string) || '',
+          video_mime_type: (row[12] as string) || 'video/mp4' // NEW: Include MIME type
         };
         videos.push(video);
       }
@@ -673,7 +720,7 @@ class DatabaseManager {
       await this.initialize();
 
       const result = this.db.exec(`
-        SELECT id, filename, original_filename, file_language, duration, created_at, video_blob, avatar_type, avatar_position, avatar_size, original_file_content, display_name
+        SELECT id, filename, original_filename, file_language, duration, created_at, video_blob, avatar_type, avatar_position, avatar_size, original_file_content, display_name, video_mime_type
         FROM shorts_videos
         WHERE id = ?
       `, [id]);
@@ -695,7 +742,8 @@ class DatabaseManager {
         avatar_position: row[8] as string,
         avatar_size: row[9] as number,
         original_file_content: (row[10] as string) || '',
-        display_name: (row[11] as string) || ''
+        display_name: (row[11] as string) || '',
+        video_mime_type: (row[12] as string) || 'video/mp4' // NEW: Include MIME type
       };
 
       return video;

@@ -47,6 +47,7 @@ function App() {
     language: string;
     duration: number;
     content: string;
+    mimeType: string; // NEW: Added MIME type
   } | null>(null);
   const videoRef = useRef<HTMLDivElement>(null);
   const codeStreamerRef = useRef<any>(null);
@@ -77,7 +78,8 @@ function App() {
     setIsRecording(!isRecording);
   };
 
-  const handleRecordingData = async (blob: Blob, duration: number) => {
+  // UPDATED: handleRecordingData to accept and store MIME type
+  const handleRecordingData = async (blob: Blob, duration: number, mimeType: string) => {
     if (!selectedFile) return;
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -89,13 +91,14 @@ function App() {
       originalFilename: selectedFile.name,
       language: selectedFile.language,
       duration,
-      content: selectedFile.content
+      content: selectedFile.content,
+      mimeType // NEW: Store the MIME type
     });
 
     setGalleryTab('videos');
     setIsGalleryOpen(true);
     
-    console.log(`Video recorded: ${fileName} (${duration}s)`);
+    console.log(`Video recorded: ${fileName} (${duration}s) with MIME type: ${mimeType}`);
   };
 
   const handlePendingVideoSaved = () => {

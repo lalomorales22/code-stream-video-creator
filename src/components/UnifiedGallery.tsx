@@ -14,6 +14,7 @@ interface UnifiedGalleryProps {
     language: string;
     duration: number;
     content: string;
+    mimeType: string; // NEW: Added MIME type
   } | null;
   onPendingVideoSaved?: () => void;
 }
@@ -289,6 +290,7 @@ Return in this exact JSON format:
     }
   };
 
+  // UPDATED: handleSavePendingVideo to pass MIME type to database
   const handleSavePendingVideo = async () => {
     if (!pendingVideo) return;
 
@@ -312,7 +314,8 @@ Return in this exact JSON format:
         pendingVideo.duration,
         pendingVideo.blob,
         pendingVideo.content,
-        displayName
+        displayName,
+        pendingVideo.mimeType // NEW: Pass the MIME type
       );
       
       await loadAllData();
@@ -335,7 +338,8 @@ Return in this exact JSON format:
 
   const handleDownloadVideo = async (video: VideoRecord | FullClipVideoRecord) => {
     try {
-      const blob = new Blob([video.video_blob], { type: 'video/mp4' });
+      // UPDATED: Use the stored MIME type instead of hardcoded 'video/mp4'
+      const blob = new Blob([video.video_blob], { type: video.video_mime_type || 'video/mp4' });
       
       if (blob.size === 0) {
         throw new Error('Video file is empty or corrupted');
@@ -784,12 +788,13 @@ Made with CodeStream: https://codestream.app`;
             controls
             className="w-full bg-black rounded-lg border-2 border-white"
             style={{ aspectRatio: '9/16' }}
-            src={URL.createObjectURL(new Blob([selectedVideo.video_blob], { type: 'video/mp4' }))}
+            // UPDATED: Use the stored MIME type instead of hardcoded 'video/mp4'
+            src={URL.createObjectURL(new Blob([selectedVideo.video_blob], { type: selectedVideo.video_mime_type || 'video/mp4' }))}
             onLoadStart={() => console.log('Video loading started')}
             onCanPlay={() => console.log('Video can play')}
             onError={(e) => {
               console.error('Video error:', e);
-              setError('Failed to load video for playback');
+              setError(`Failed to load video for playback. MIME type: ${selectedVideo.video_mime_type || 'unknown'}`);
             }}
           />
         </div>
@@ -1079,6 +1084,7 @@ Made with CodeStream: https://codestream.app`;
                       <span>{formatDuration(pendingVideo.duration)}</span>
                       <span>{formatFileSize(pendingVideo.blob.size)}</span>
                       <span className="capitalize">{pendingVideo.language}</span>
+                      <span className="text-xs">MIME: {pendingVideo.mimeType}</span>
                     </div>
                   </div>
                 )}
