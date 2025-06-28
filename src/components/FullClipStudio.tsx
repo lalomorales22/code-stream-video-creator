@@ -569,8 +569,8 @@ Return ONLY the script text with exactly ${targetWords} words, no formatting or 
       });
       originalVideo.src = URL.createObjectURL(originalVideoBlob);
 
-      // Load avatar image
-      const avatarImg = new Image();
+      // Load avatar image using document.createElement instead of new Image()
+      const avatarImg = document.createElement('img');
       avatarImg.crossOrigin = 'anonymous';
       
       await new Promise<void>((resolve, reject) => {
@@ -582,7 +582,7 @@ Return ONLY the script text with exactly ${targetWords} words, no formatting or 
       // Load thumbnail image if selected
       let thumbnailImg: HTMLImageElement | null = null;
       if (selectedThumbnail && showThumbnail) {
-        thumbnailImg = new Image();
+        thumbnailImg = document.createElement('img');
         thumbnailImg.crossOrigin = 'anonymous';
         
         await new Promise<void>((resolve, reject) => {
