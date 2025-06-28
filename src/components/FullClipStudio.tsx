@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Play, Pause, Download, Save, Settings, ChevronDown, ChevronUp, Mic, Volume2, User, Captions, Loader2, CheckCircle, AlertCircle, FileAudio, Zap, Eye, EyeOff } from 'lucide-react';
+import { X, Play, Pause, Download, Save, Settings, ChevronDown, ChevronUp, Mic, Volume2, User, Captions, Loader2, CheckCircle, AlertCircle, FileAudio, Zap, Eye, EyeOff, Upload, Image, Trash2 } from 'lucide-react';
 import { dbManager, VideoRecord } from '../utils/database';
 
 interface FullClipStudioProps {
@@ -20,6 +20,15 @@ interface AvatarOption {
   name: string;
   url: string;
   type: 'preset' | 'uploaded' | 'generated';
+  dbId?: number; // For database-stored avatars
+}
+
+interface ThumbnailOption {
+  id: string;
+  name: string;
+  url: string;
+  type: 'uploaded' | 'generated';
+  dbId?: number; // For database-stored thumbnails
 }
 
 const FullClipStudio: React.FC<FullClipStudioProps> = ({
@@ -57,6 +66,15 @@ const FullClipStudio: React.FC<FullClipStudioProps> = ({
   const [avatarPosition, setAvatarPosition] = useState<'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'>('bottom-right');
   const [avatarSize, setAvatarSize] = useState(80);
   const [showAvatarPreview, setShowAvatarPreview] = useState(true);
+  const [uploadedAvatars, setUploadedAvatars] = useState<AvatarOption[]>([]);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+
+  // Thumbnail State
+  const [selectedThumbnail, setSelectedThumbnail] = useState<ThumbnailOption | null>(null);
+  const [uploadedThumbnails, setUploadedThumbnails] = useState<ThumbnailOption[]>([]);
+  const [showThumbnail, setShowThumbnail] = useState(true);
+  const [thumbnailDuration, setThumbnailDuration] = useState(1); // Duration in seconds
+  const [isUploadingThumbnail, setIsUploadingThumbnail] = useState(false);
 
   // Caption State
   const [captions, setCaptions] = useState<CaptionSegment[]>([]);
@@ -78,6 +96,8 @@ const FullClipStudio: React.FC<FullClipStudioProps> = ({
   const audioRef = useRef<HTMLAudioElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const avatarFileInputRef = useRef<HTMLInputElement>(null);
+  const thumbnailFileInputRef = useRef<HTMLInputElement>(null);
 
   // Preset avatars
   const presetAvatars: AvatarOption[] = [
@@ -101,6 +121,13 @@ const FullClipStudio: React.FC<FullClipStudioProps> = ({
     }
   }, []);
 
+  // Load uploaded avatars and thumbnails from database
+  useEffect(() => {
+    if (isOpen) {
+      loadUploadedAssets();
+    }
+  }, [isOpen]);
+
   // Reset state when modal opens/closes
   useEffect(() => {
     if (isOpen && selectedVideo) {
@@ -120,6 +147,181 @@ const FullClipStudio: React.FC<FullClipStudioProps> = ({
     setSuccess(false);
     setVideoProgress(0);
     setIsCreatingVideo(false);
+    setSelectedThumbnail(null);
+  };
+
+  const loadUploadedAssets = async () => {
+    try {
+      // Load avatars from database
+      const avatars = await dbManager.getAllAvatars();
+      const avatarOptions: AvatarOption[] = avatars.map(avatar => ({
+        id: `db-${avatar.id}`,
+        name: avatar.name,
+        url: URL.createObjectURL(new Blob([avatar.image_data], { type: avatar.image_type })),
+        type: avatar.avatar_type === 'uploaded' ? 'uploaded' : 'generated',
+        dbId: avatar.id
+      }));
+      setUploadedAvatars(avatarOptions);
+
+      // For thumbnails, we'll use the same avatar system for now
+      // You could create a separate thumbnails table if needed
+      const thumbnailOptions: ThumbnailOption[] = avatars.map(avatar => ({
+        id: `thumb-${avatar.id}`,
+        name: `${avatar.name} (Thumbnail)`,
+        url: URL.createObjectURL(new Blob([avatar.image_data], { type: avatar.image_type })),
+        type: avatar.avatar_type === 'uploaded' ? 'uploaded' : 'generated',
+        dbId: avatar.id
+      }));
+      setUploadedThumbnails(thumbnailOptions);
+    } catch (error) {
+      console.error('Failed to load uploaded assets:', error);
+    }
+  };
+
+  const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setError('Please upload a valid image file');
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setError('Image file must be smaller than 5MB');
+      return;
+    }
+
+    setIsUploadingAvatar(true);
+    setError(null);
+
+    try {
+      // Save to database
+      const avatarId = await dbManager.saveAvatar(
+        file.name.replace(/\.[^/.]+$/, ''), // Remove extension for name
+        `Uploaded avatar: ${file.name}`,
+        file,
+        'uploaded'
+      );
+
+      // Create avatar option
+      const newAvatar: AvatarOption = {
+        id: `db-${avatarId}`,
+        name: file.name.replace(/\.[^/.]+$/, ''),
+        url: URL.createObjectURL(file),
+        type: 'uploaded',
+        dbId: avatarId
+      };
+
+      setUploadedAvatars(prev => [newAvatar, ...prev]);
+      setSelectedAvatar(newAvatar);
+
+      console.log('Avatar uploaded successfully:', newAvatar);
+    } catch (error) {
+      console.error('Failed to upload avatar:', error);
+      setError('Failed to upload avatar. Please try again.');
+    } finally {
+      setIsUploadingAvatar(false);
+      // Reset file input
+      if (avatarFileInputRef.current) {
+        avatarFileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleThumbnailUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setError('Please upload a valid image file');
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setError('Image file must be smaller than 5MB');
+      return;
+    }
+
+    setIsUploadingThumbnail(true);
+    setError(null);
+
+    try {
+      // Save to database (reusing avatar table for thumbnails)
+      const thumbnailId = await dbManager.saveAvatar(
+        `${file.name.replace(/\.[^/.]+$/, '')} (Thumbnail)`,
+        `Uploaded thumbnail: ${file.name}`,
+        file,
+        'uploaded'
+      );
+
+      // Create thumbnail option
+      const newThumbnail: ThumbnailOption = {
+        id: `thumb-${thumbnailId}`,
+        name: file.name.replace(/\.[^/.]+$/, ''),
+        url: URL.createObjectURL(file),
+        type: 'uploaded',
+        dbId: thumbnailId
+      };
+
+      setUploadedThumbnails(prev => [newThumbnail, ...prev]);
+      setSelectedThumbnail(newThumbnail);
+
+      console.log('Thumbnail uploaded successfully:', newThumbnail);
+    } catch (error) {
+      console.error('Failed to upload thumbnail:', error);
+      setError('Failed to upload thumbnail. Please try again.');
+    } finally {
+      setIsUploadingThumbnail(false);
+      // Reset file input
+      if (thumbnailFileInputRef.current) {
+        thumbnailFileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleDeleteAvatar = async (avatar: AvatarOption) => {
+    if (avatar.type === 'preset' || !avatar.dbId) return;
+
+    try {
+      await dbManager.deleteAvatar(avatar.dbId);
+      setUploadedAvatars(prev => prev.filter(a => a.id !== avatar.id));
+      
+      // If this was the selected avatar, switch to a preset
+      if (selectedAvatar?.id === avatar.id) {
+        setSelectedAvatar(presetAvatars[0]);
+      }
+
+      // Clean up URL
+      URL.revokeObjectURL(avatar.url);
+    } catch (error) {
+      console.error('Failed to delete avatar:', error);
+      setError('Failed to delete avatar');
+    }
+  };
+
+  const handleDeleteThumbnail = async (thumbnail: ThumbnailOption) => {
+    if (!thumbnail.dbId) return;
+
+    try {
+      await dbManager.deleteAvatar(thumbnail.dbId);
+      setUploadedThumbnails(prev => prev.filter(t => t.id !== thumbnail.id));
+      
+      // If this was the selected thumbnail, clear selection
+      if (selectedThumbnail?.id === thumbnail.id) {
+        setSelectedThumbnail(null);
+      }
+
+      // Clean up URL
+      URL.revokeObjectURL(thumbnail.url);
+    } catch (error) {
+      console.error('Failed to delete thumbnail:', error);
+      setError('Failed to delete thumbnail');
+    }
   };
 
   const handleApiKeysSave = async () => {
@@ -328,7 +530,7 @@ Return ONLY the script text with exactly ${targetWords} words, no formatting or 
     }
   };
 
-  // FIXED: Enhanced video creation with proper MIME type handling and memory management
+  // Enhanced video creation with thumbnail and avatar support
   const createFullClipVideo = async () => {
     if (!selectedVideo || !audioBlob || !selectedAvatar) {
       setError('Missing required components for video creation');
@@ -362,7 +564,6 @@ Return ONLY the script text with exactly ${targetWords} words, no formatting or 
       originalVideo.muted = true;
       originalVideo.playsInline = true;
       
-      // FIXED: Use proper MIME type from stored video
       const originalVideoBlob = new Blob([selectedVideo.video_blob], { 
         type: selectedVideo.video_mime_type || 'video/mp4' 
       });
@@ -377,6 +578,19 @@ Return ONLY the script text with exactly ${targetWords} words, no formatting or 
         avatarImg.onerror = () => reject(new Error('Failed to load avatar'));
         avatarImg.src = selectedAvatar.url;
       });
+
+      // Load thumbnail image if selected
+      let thumbnailImg: HTMLImageElement | null = null;
+      if (selectedThumbnail && showThumbnail) {
+        thumbnailImg = new Image();
+        thumbnailImg.crossOrigin = 'anonymous';
+        
+        await new Promise<void>((resolve, reject) => {
+          thumbnailImg!.onload = () => resolve();
+          thumbnailImg!.onerror = () => reject(new Error('Failed to load thumbnail'));
+          thumbnailImg!.src = selectedThumbnail.url;
+        });
+      }
 
       // Wait for original video to load
       await new Promise<void>((resolve, reject) => {
@@ -407,7 +621,7 @@ Return ONLY the script text with exactly ${targetWords} words, no formatting or 
         stream.addTrack(audioTrack);
       }
 
-      // FIXED: Enhanced codec selection with better compatibility
+      // Enhanced codec selection with better compatibility
       const codecOptions = [
         'video/mp4;codecs=avc1.42E01E,mp4a.40.2', // H.264 + AAC (best compatibility)
         'video/mp4;codecs=avc1.42E01E', // H.264 baseline
@@ -425,7 +639,7 @@ Return ONLY the script text with exactly ${targetWords} words, no formatting or 
         }
       }
 
-      // FIXED: Create MediaRecorder with optimized settings
+      // Create MediaRecorder with optimized settings
       mediaRecorder = new MediaRecorder(stream, {
         mimeType: selectedMimeType,
         videoBitsPerSecond: 6000000, // 6 Mbps for good quality
@@ -448,7 +662,7 @@ Return ONLY the script text with exactly ${targetWords} words, no formatting or 
             throw new Error('No video data recorded');
           }
 
-          // FIXED: Create final blob with proper MIME type
+          // Create final blob with proper MIME type
           const finalMimeType = selectedMimeType.includes('mp4') ? 'video/mp4' : 'video/webm';
           const finalVideoBlob = new Blob(recordedChunks, { type: finalMimeType });
           
@@ -477,7 +691,7 @@ Return ONLY the script text with exactly ${targetWords} words, no formatting or 
             captions,
             selectedVideo.original_file_content,
             displayName,
-            finalMimeType // FIXED: Pass the correct MIME type
+            finalMimeType
           );
 
           setSuccess(true);
@@ -518,9 +732,10 @@ Return ONLY the script text with exactly ${targetWords} words, no formatting or 
       ]);
 
       const startTime = Date.now();
-      const totalDuration = Math.max(selectedVideo.duration, audioDuration) * 1000; // Convert to ms
+      const thumbnailEndTime = selectedThumbnail && showThumbnail ? thumbnailDuration * 1000 : 0;
+      const totalDuration = Math.max(selectedVideo.duration, audioDuration) * 1000 + thumbnailEndTime;
 
-      // FIXED: Optimized rendering loop with better memory management
+      // Optimized rendering loop with thumbnail support
       const renderFrame = () => {
         const elapsed = Date.now() - startTime;
         const progress = Math.min(elapsed / totalDuration, 1);
@@ -542,72 +757,94 @@ Return ONLY the script text with exactly ${targetWords} words, no formatting or 
         ctx.fillStyle = '#000000';
         ctx.fillRect(0, 0, width, height);
 
-        // Draw original video
-        if (originalVideo.readyState >= 2) {
-          ctx.drawImage(originalVideo, 0, 0, width, height);
-        }
-
-        // Draw avatar
-        if (showAvatarPreview && avatarImg.complete) {
-          const avatarPixelSize = avatarSize;
-          const padding = 20;
+        // Show thumbnail for the first few seconds if enabled
+        if (thumbnailImg && showThumbnail && elapsed < thumbnailEndTime) {
+          // Draw thumbnail
+          ctx.drawImage(thumbnailImg, 0, 0, width, height);
           
-          let avatarX, avatarY;
-          switch (avatarPosition) {
-            case 'top-left':
-              avatarX = padding;
-              avatarY = padding;
-              break;
-            case 'top-right':
-              avatarX = width - avatarPixelSize - padding;
-              avatarY = padding;
-              break;
-            case 'bottom-left':
-              avatarX = padding;
-              avatarY = height - avatarPixelSize - padding;
-              break;
-            case 'bottom-right':
-            default:
-              avatarX = width - avatarPixelSize - padding;
-              avatarY = height - avatarPixelSize - padding;
-              break;
-          }
+          // Add thumbnail overlay text
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+          ctx.fillRect(0, height - 100, width, 100);
           
-          // Draw avatar with circular mask
-          ctx.save();
-          ctx.beginPath();
-          ctx.arc(avatarX + avatarPixelSize/2, avatarY + avatarPixelSize/2, avatarPixelSize/2, 0, 2 * Math.PI);
-          ctx.clip();
-          ctx.drawImage(avatarImg, avatarX, avatarY, avatarPixelSize, avatarPixelSize);
-          ctx.restore();
-        }
-
-        // Draw captions
-        const currentTime = (elapsed / 1000);
-        const currentCaption = captions.find(cap => currentTime >= cap.start && currentTime <= cap.end);
-        
-        if (currentCaption) {
-          ctx.font = `${captionStyle.fontWeight} ${captionStyle.fontSize}px Arial`;
+          ctx.fillStyle = '#FFFFFF';
+          ctx.font = 'bold 24px Arial';
           ctx.textAlign = 'center';
-          ctx.fillStyle = captionStyle.backgroundColor;
+          ctx.fillText('Starting in...', width / 2, height - 60);
           
-          const textMetrics = ctx.measureText(currentCaption.text);
-          const textWidth = textMetrics.width + 20;
-          const textHeight = captionStyle.fontSize + 10;
+          const countdown = Math.ceil((thumbnailEndTime - elapsed) / 1000);
+          ctx.font = 'bold 36px Arial';
+          ctx.fillText(countdown.toString(), width / 2, height - 20);
+        } else {
+          // Draw original video (adjust timing for thumbnail)
+          const videoTime = Math.max(0, (elapsed - thumbnailEndTime) / 1000);
+          originalVideo.currentTime = Math.min(videoTime, selectedVideo.duration);
           
-          let captionY;
-          if (captionStyle.position === 'top') {
-            captionY = 100;
-          } else {
-            captionY = height - 150;
+          if (originalVideo.readyState >= 2) {
+            ctx.drawImage(originalVideo, 0, 0, width, height);
           }
+
+          // Draw avatar
+          if (showAvatarPreview && avatarImg.complete) {
+            const avatarPixelSize = avatarSize;
+            const padding = 20;
+            
+            let avatarX, avatarY;
+            switch (avatarPosition) {
+              case 'top-left':
+                avatarX = padding;
+                avatarY = padding;
+                break;
+              case 'top-right':
+                avatarX = width - avatarPixelSize - padding;
+                avatarY = padding;
+                break;
+              case 'bottom-left':
+                avatarX = padding;
+                avatarY = height - avatarPixelSize - padding;
+                break;
+              case 'bottom-right':
+              default:
+                avatarX = width - avatarPixelSize - padding;
+                avatarY = height - avatarPixelSize - padding;
+                break;
+            }
+            
+            // Draw avatar with circular mask
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(avatarX + avatarPixelSize/2, avatarY + avatarPixelSize/2, avatarPixelSize/2, 0, 2 * Math.PI);
+            ctx.clip();
+            ctx.drawImage(avatarImg, avatarX, avatarY, avatarPixelSize, avatarPixelSize);
+            ctx.restore();
+          }
+
+          // Draw captions (adjust timing for thumbnail)
+          const currentTime = Math.max(0, (elapsed - thumbnailEndTime) / 1000);
+          const currentCaption = captions.find(cap => currentTime >= cap.start && currentTime <= cap.end);
           
-          // Draw background
-          ctx.fillRect((width - textWidth) / 2, captionY - textHeight/2, textWidth, textHeight);
-          
-          // Draw text
-          ctx.fillStyle = captionStyle.color;
-          ctx.fillText(currentCaption.text, width / 2, captionY + captionStyle.fontSize/3);
+          if (currentCaption) {
+            ctx.font = `${captionStyle.fontWeight} ${captionStyle.fontSize}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.fillStyle = captionStyle.backgroundColor;
+            
+            const textMetrics = ctx.measureText(currentCaption.text);
+            const textWidth = textMetrics.width + 20;
+            const textHeight = captionStyle.fontSize + 10;
+            
+            let captionY;
+            if (captionStyle.position === 'top') {
+              captionY = 100;
+            } else {
+              captionY = height - 150;
+            }
+            
+            // Draw background
+            ctx.fillRect((width - textWidth) / 2, captionY - textHeight/2, textWidth, textHeight);
+            
+            // Draw text
+            ctx.fillStyle = captionStyle.color;
+            ctx.fillText(currentCaption.text, width / 2, captionY + captionStyle.fontSize/3);
+          }
         }
 
         animationId = requestAnimationFrame(renderFrame);
@@ -843,6 +1080,102 @@ Return ONLY the script text with exactly ${targetWords} words, no formatting or 
               </div>
             )}
 
+            {/* Thumbnail Selection */}
+            {audioGenerated && (
+              <div className="bg-black border-2 border-white rounded-lg p-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-white font-bold text-lg flex items-center gap-2">
+                    <Image className="w-5 h-5" />
+                    Thumbnail (Optional)
+                  </h3>
+                  <button
+                    onClick={() => setShowThumbnail(!showThumbnail)}
+                    className="flex items-center gap-2 px-3 py-1 bg-black border-2 border-white text-white hover:bg-white hover:text-black rounded transition-colors"
+                  >
+                    {showThumbnail ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                    {showThumbnail ? 'Hide' : 'Show'}
+                  </button>
+                </div>
+                
+                {showThumbnail && (
+                  <div className="space-y-4">
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => thumbnailFileInputRef.current?.click()}
+                        disabled={isUploadingThumbnail}
+                        className="flex-1 bg-white hover:bg-gray-200 disabled:bg-gray-600 text-black px-4 py-3 rounded font-bold transition-colors border-2 border-white flex items-center justify-center gap-2"
+                      >
+                        {isUploadingThumbnail ? (
+                          <>
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                            Uploading...
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="w-5 h-5" />
+                            Upload Thumbnail
+                          </>
+                        )}
+                      </button>
+                      
+                      <input
+                        ref={thumbnailFileInputRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={handleThumbnailUpload}
+                        className="hidden"
+                      />
+                    </div>
+                    
+                    {uploadedThumbnails.length > 0 && (
+                      <div>
+                        <label className="block text-white font-bold mb-2">Select Thumbnail</label>
+                        <div className="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto">
+                          {uploadedThumbnails.map(thumbnail => (
+                            <div key={thumbnail.id} className="relative">
+                              <button
+                                onClick={() => setSelectedThumbnail(thumbnail)}
+                                className={`w-full p-2 rounded border-2 transition-colors ${
+                                  selectedThumbnail?.id === thumbnail.id
+                                    ? 'border-white bg-white text-black'
+                                    : 'border-gray-600 text-white hover:border-white'
+                                }`}
+                              >
+                                <img src={thumbnail.url} alt={thumbnail.name} className="w-full h-12 object-cover rounded mb-1" />
+                                <span className="text-xs font-bold truncate block">{thumbnail.name}</span>
+                              </button>
+                              
+                              <button
+                                onClick={() => handleDeleteThumbnail(thumbnail)}
+                                className="absolute top-1 right-1 p-1 bg-red-500 hover:bg-red-600 text-white rounded-full"
+                                title="Delete thumbnail"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    <div>
+                      <label className="block text-white font-bold mb-2">Duration: {thumbnailDuration}s</label>
+                      <input
+                        type="range"
+                        min="0.5"
+                        max="5"
+                        step="0.5"
+                        value={thumbnailDuration}
+                        onChange={(e) => setThumbnailDuration(Number(e.target.value))}
+                        className="w-full"
+                      />
+                      <p className="text-gray-400 text-xs mt-1">How long to show thumbnail before video starts</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Avatar Selection */}
             {audioGenerated && (
               <div className="bg-black border-2 border-white rounded-lg p-4">
@@ -861,8 +1194,36 @@ Return ONLY the script text with exactly ${targetWords} words, no formatting or 
                 </div>
                 
                 <div className="space-y-4">
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => avatarFileInputRef.current?.click()}
+                      disabled={isUploadingAvatar}
+                      className="flex-1 bg-white hover:bg-gray-200 disabled:bg-gray-600 text-black px-4 py-3 rounded font-bold transition-colors border-2 border-white flex items-center justify-center gap-2"
+                    >
+                      {isUploadingAvatar ? (
+                        <>
+                          <Loader2 className="w-5 h-5 animate-spin" />
+                          Uploading...
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="w-5 h-5" />
+                          Upload Avatar
+                        </>
+                      )}
+                    </button>
+                    
+                    <input
+                      ref={avatarFileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleAvatarUpload}
+                      className="hidden"
+                    />
+                  </div>
+                  
                   <div>
-                    <label className="block text-white font-bold mb-2">Select Avatar</label>
+                    <label className="block text-white font-bold mb-2">Preset Avatars</label>
                     <div className="grid grid-cols-2 gap-2">
                       {presetAvatars.map(avatar => (
                         <button
@@ -880,6 +1241,37 @@ Return ONLY the script text with exactly ${targetWords} words, no formatting or 
                       ))}
                     </div>
                   </div>
+                  
+                  {uploadedAvatars.length > 0 && (
+                    <div>
+                      <label className="block text-white font-bold mb-2">Uploaded Avatars</label>
+                      <div className="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto">
+                        {uploadedAvatars.map(avatar => (
+                          <div key={avatar.id} className="relative">
+                            <button
+                              onClick={() => setSelectedAvatar(avatar)}
+                              className={`w-full p-3 rounded border-2 transition-colors ${
+                                selectedAvatar?.id === avatar.id
+                                  ? 'border-white bg-white text-black'
+                                  : 'border-gray-600 text-white hover:border-white'
+                              }`}
+                            >
+                              <img src={avatar.url} alt={avatar.name} className="w-8 h-8 mx-auto mb-1 rounded-full" />
+                              <span className="text-xs font-bold truncate block">{avatar.name}</span>
+                            </button>
+                            
+                            <button
+                              onClick={() => handleDeleteAvatar(avatar)}
+                              className="absolute top-1 right-1 p-1 bg-red-500 hover:bg-red-600 text-white rounded-full"
+                              title="Delete avatar"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   
                   <div>
                     <label className="block text-white font-bold mb-2">Position</label>
