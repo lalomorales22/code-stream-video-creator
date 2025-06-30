@@ -164,7 +164,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnterApp }) => {
                       <span className="text-yellow-400">createVideo</span>
                       <span className="text-white">(</span>
                       <span className="text-orange-400">code</span>
-                      <span className="text-white">) {</span>
+                      <span className="text-white">) {'{'}</span>
                     </div>
                     <div className="flex">
                       <span className="text-gray-400 w-8">2</span>
@@ -182,7 +182,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnterApp }) => {
                     </div>
                     <div className="flex">
                       <span className="text-gray-400 w-8">4</span>
-                      <span className="text-white">}</span>
+                      <span className="text-white">{'}'}</span>
                       <span className="text-white bg-white w-1 h-4 ml-1 animate-pulse" />
                     </div>
                   </div>
