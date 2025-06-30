@@ -6,6 +6,7 @@ import ControlPanel from './components/ControlPanel';
 import UnifiedGallery from './components/UnifiedGallery';
 import FullClipStudio from './components/FullClipStudio';
 import ColorCustomizer, { ColorScheme } from './components/ColorCustomizer';
+import LandingPage from './pages/LandingPage';
 
 export interface FileData {
   id: string;
@@ -29,6 +30,7 @@ const defaultColorScheme: ColorScheme = {
 };
 
 function App() {
+  const [showLanding, setShowLanding] = useState(true);
   const [files, setFiles] = useState<FileData[]>([]);
   const [selectedFile, setSelectedFile] = useState<FileData | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -47,10 +49,14 @@ function App() {
     language: string;
     duration: number;
     content: string;
-    mimeType: string; // NEW: Added MIME type
+    mimeType: string;
   } | null>(null);
   const videoRef = useRef<HTMLDivElement>(null);
   const codeStreamerRef = useRef<any>(null);
+
+  const handleEnterApp = () => {
+    setShowLanding(false);
+  };
 
   const handleFilesUploaded = (uploadedFiles: FileData[]) => {
     setFiles(prev => [...prev, ...uploadedFiles]);
@@ -78,7 +84,6 @@ function App() {
     setIsRecording(!isRecording);
   };
 
-  // UPDATED: handleRecordingData to accept and store MIME type
   const handleRecordingData = async (blob: Blob, duration: number, mimeType: string) => {
     if (!selectedFile) return;
 
@@ -92,7 +97,7 @@ function App() {
       language: selectedFile.language,
       duration,
       content: selectedFile.content,
-      mimeType // NEW: Store the MIME type
+      mimeType
     });
 
     setGalleryTab('videos');
@@ -140,6 +145,11 @@ function App() {
       window.removeEventListener('openFullClipGallery', handleOpenFullClipGallery);
     };
   }, []);
+
+  // Show landing page first
+  if (showLanding) {
+    return <LandingPage onEnterApp={handleEnterApp} />;
+  }
 
   return (
     <div className="min-h-screen bg-black text-white relative">
