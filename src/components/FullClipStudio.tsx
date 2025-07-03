@@ -171,18 +171,53 @@ const FullClipStudio: React.FC<FullClipStudioProps> = ({
     }
   };
 
+  const generateScriptWithOpenRouter = async (prompt: string, targetWords: number, openRouterApiKey: string) => {
+    console.log('Trying OpenRouter as fallback...');
+    
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${openRouterApiKey}`,
+        'HTTP-Referer': window.location.origin,
+        'X-Title': 'Code Stream Video Creator'
+      },
+      body: JSON.stringify({
+        messages: [
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        model: 'x-ai/grok-beta', // OpenRouter model format
+        stream: false,
+        temperature: 0.7,
+        max_tokens: targetWords * 2
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`OpenRouter Error (${response.status}): ${errorText}`);
+    }
+
+    const data = await response.json();
+    console.log('OpenRouter API Response:', data);
+    
+    return data.choices?.[0]?.message?.content?.trim() || '';
+  };
+
   const generateScript = async () => {
     if (!selectedVideo || !xaiApiKey) return;
 
     setIsGeneratingScript(true);
     setError(null);
 
-    try {
-      // Calculate target word count based on video duration
-      // Aim for ~150 words per minute of video
-      const targetWords = Math.max(20, Math.floor((selectedVideo.duration / 60) * 150));
-      
-      const prompt = `Create a script for a ${selectedVideo.duration} second code video. The script should be EXACTLY ${targetWords} words.
+    // Calculate target word count based on video duration
+    // Aim for ~150 words per minute of video
+    const targetWords = Math.max(20, Math.floor((selectedVideo.duration / 60) * 150));
+    
+    const prompt = `Create a script for a ${selectedVideo.duration} second code video. The script should be EXACTLY ${targetWords} words.
 
 CRITICAL REQUIREMENTS:
 - Start with "Wussup Fam!"
@@ -201,55 +236,159 @@ Language: ${selectedVideo.file_language}
 
 Return ONLY the script text with exactly ${targetWords} words, no formatting or extra text.`;
 
-      const response = await fetch('https://api.x.ai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${xaiApiKey}`
-        },
-        body: JSON.stringify({
-          messages: [
-            {
-              role: 'user',
-              content: prompt
-            }
-          ],
-          model: 'grok-beta',
-          stream: false,
-          temperature: 0.7,
-          max_tokens: targetWords * 2 // Give some buffer for generation
-        })
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        let generatedScript = data.choices?.[0]?.message?.content?.trim() || '';
-        
-        // Clean the script - remove all symbols and punctuation
-        generatedScript = generatedScript
-          .replace(/[^\w\s]/g, ' ') // Remove all non-word characters except spaces
-          .replace(/\s+/g, ' ') // Replace multiple spaces with single space
-          .trim();
-        
-        // Ensure it starts with "Wussup Fam"
-        if (!generatedScript.toLowerCase().startsWith('wussup fam')) {
-          generatedScript = 'Wussup Fam ' + generatedScript;
-        }
-        
-        // Trim to target word count
-        const words = generatedScript.split(' ');
-        if (words.length > targetWords) {
-          generatedScript = words.slice(0, targetWords).join(' ');
-        }
-        
-        setScript(generatedScript);
-        setScriptGenerated(true);
-      } else {
-        throw new Error('Failed to generate script');
+    try {
+      // Validate API key format
+      if (!xaiApiKey.startsWith('xai-')) {
+        throw new Error('Invalid xAI API key format. Key should start with "xai-"');
       }
-    } catch (error) {
-      console.error('Failed to generate script:', error);
-      setError('Failed to generate script. Please check your XAI API key.');
+
+      // Try different model names in order of preference
+      const modelNames = [
+        'grok-beta',
+        'grok-3-beta', 
+        'grok-3-mini',
+        'grok-2-1212',
+        'grok-2'
+      ];
+
+      let lastError = null;
+
+      for (const modelName of modelNames) {
+        try {
+          console.log(`Trying xAI API with model: ${modelName}`);
+          
+          const response = await fetch('https://api.x.ai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${xaiApiKey}`
+            },
+            body: JSON.stringify({
+              messages: [
+                {
+                  role: 'user',
+                  content: prompt
+                }
+              ],
+              model: modelName,
+              stream: false,
+              temperature: 0.7,
+              max_tokens: targetWords * 2 // Give some buffer for generation
+            })
+          });
+
+          console.log(`Response status: ${response.status}`);
+          console.log(`Response headers:`, Object.fromEntries(response.headers.entries()));
+
+          if (response.ok) {
+            const data = await response.json();
+            console.log('API Response:', data);
+            
+            let generatedScript = data.choices?.[0]?.message?.content?.trim() || '';
+            
+            // Clean the script - remove all symbols and punctuation
+            generatedScript = generatedScript
+              .replace(/[^\w\s]/g, ' ') // Remove all non-word characters except spaces
+              .replace(/\s+/g, ' ') // Replace multiple spaces with single space
+              .trim();
+            
+            // Ensure it starts with "Wussup Fam"
+            if (!generatedScript.toLowerCase().startsWith('wussup fam')) {
+              generatedScript = 'Wussup Fam ' + generatedScript;
+            }
+            
+            // Trim to target word count
+            const words = generatedScript.split(' ');
+            if (words.length > targetWords) {
+              generatedScript = words.slice(0, targetWords).join(' ');
+            }
+            
+            setScript(generatedScript);
+            setScriptGenerated(true);
+            console.log(`Successfully generated script with model: ${modelName}`);
+            return; // Success - exit the function
+          } else {
+            // Read error response
+            const errorText = await response.text();
+            console.log(`Error response body:`, errorText);
+            
+            try {
+              const errorData = JSON.parse(errorText);
+              lastError = new Error(`API Error (${response.status}): ${errorData.error?.message || errorData.message || 'Unknown error'}`);
+            } catch {
+              lastError = new Error(`API Error (${response.status}): ${errorText || 'Unknown error'}`);
+            }
+          }
+        } catch (err) {
+          console.log(`Error with model ${modelName}:`, err);
+          lastError = err;
+          continue; // Try next model
+        }
+      }
+      
+      // If we get here, all models failed
+      throw lastError || new Error('All model attempts failed');
+      
+    } catch (error: any) {
+      console.error('Direct xAI API failed:', error);
+      
+      // Try OpenRouter as fallback
+      const openRouterKey = localStorage.getItem('openrouter_api_key');
+      if (openRouterKey) {
+        try {
+          console.log('Attempting OpenRouter fallback...');
+          const generatedScript = await generateScriptWithOpenRouter(prompt, targetWords, openRouterKey);
+          
+          if (generatedScript) {
+            // Clean the script - remove all symbols and punctuation
+            let cleanScript = generatedScript
+              .replace(/[^\w\s]/g, ' ') // Remove all non-word characters except spaces
+              .replace(/\s+/g, ' ') // Replace multiple spaces with single space
+              .trim();
+            
+            // Ensure it starts with "Wussup Fam"
+            if (!cleanScript.toLowerCase().startsWith('wussup fam')) {
+              cleanScript = 'Wussup Fam ' + cleanScript;
+            }
+            
+            // Trim to target word count
+            const words = cleanScript.split(' ');
+            if (words.length > targetWords) {
+              cleanScript = words.slice(0, targetWords).join(' ');
+            }
+            
+            setScript(cleanScript);
+            setScriptGenerated(true);
+            console.log('Successfully generated script with OpenRouter fallback');
+            return;
+          }
+        } catch (openRouterError: any) {
+          console.error('OpenRouter fallback also failed:', openRouterError);
+        }
+      }
+      
+      // If both fail, show detailed error message
+      let errorMessage = 'Failed to generate script. ';
+      
+      if (error?.message?.includes('Invalid xAI API key format')) {
+        errorMessage += 'Please check your xAI API key format. It should start with "xai-".';
+      } else if (error?.message?.includes('401')) {
+        errorMessage += 'Invalid API key. Please check your xAI API key.';
+      } else if (error?.message?.includes('404')) {
+        errorMessage += 'Model not found. The xAI API might have updated. You can also try adding an OpenRouter API key in localStorage as "openrouter_api_key" for a fallback option.';
+      } else if (error?.message?.includes('429')) {
+        errorMessage += 'Rate limit exceeded. Please wait a moment and try again.';
+      } else if (error?.message?.includes('Network Error') || error?.message?.includes('fetch')) {
+        errorMessage += 'Network error. Please check your internet connection.';
+      } else {
+        errorMessage += error?.message || 'Unknown error occurred.';
+      }
+      
+      if (!openRouterKey) {
+        errorMessage += ' Tip: You can add an OpenRouter API key to localStorage as "openrouter_api_key" for a backup option.';
+      }
+      
+      setError(errorMessage);
     } finally {
       setIsGeneratingScript(false);
     }
