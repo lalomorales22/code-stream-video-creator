@@ -65,6 +65,11 @@ const FullClipStudio: React.FC<FullClipStudioProps> = ({
   const [showThumbnail, setShowThumbnail] = useState(true);
   const [uploadedThumbnails, setUploadedThumbnails] = useState<string[]>([]);
 
+  // Ending Thumbnail State
+  const [selectedEndingThumbnail, setSelectedEndingThumbnail] = useState<string | null>(null);
+  const [showEndingThumbnail, setShowEndingThumbnail] = useState(true);
+  const [uploadedEndingThumbnails, setUploadedEndingThumbnails] = useState<string[]>([]);
+
   // Caption State
   const [captions, setCaptions] = useState<CaptionSegment[]>([]);
   const [captionStyle, setCaptionStyle] = useState({
@@ -87,6 +92,7 @@ const FullClipStudio: React.FC<FullClipStudioProps> = ({
   const videoRef = useRef<HTMLVideoElement>(null);
   const avatarFileInputRef = useRef<HTMLInputElement>(null);
   const thumbnailFileInputRef = useRef<HTMLInputElement>(null);
+  const endingThumbnailFileInputRef = useRef<HTMLInputElement>(null);
 
   // Preset avatars
   const presetAvatars: AvatarOption[] = [
@@ -130,6 +136,7 @@ const FullClipStudio: React.FC<FullClipStudioProps> = ({
     setVideoProgress(0);
     setIsCreatingVideo(false);
     setSelectedThumbnail(null);
+    setSelectedEndingThumbnail(null);
   };
 
   const handleApiKeysSave = async () => {
@@ -504,6 +511,16 @@ Return ONLY the script text with exactly ${targetWords} words, no formatting or 
     }
   };
 
+  // Handle ending thumbnail upload
+  const handleEndingThumbnailUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file && file.type.startsWith('image/')) {
+      const url = URL.createObjectURL(file);
+      setUploadedEndingThumbnails(prev => [...prev, url]);
+      setSelectedEndingThumbnail(url);
+    }
+  };
+
   // FIXED: Enhanced video creation with proper video rendering
   const createFullClipVideo = async () => {
     if (!selectedVideo || !audioBlob || !selectedAvatar) {
@@ -565,6 +582,19 @@ Return ONLY the script text with exactly ${targetWords} words, no formatting or 
           thumbnailImg!.onload = () => resolve();
           thumbnailImg!.onerror = () => reject(new Error('Failed to load thumbnail'));
           thumbnailImg!.src = selectedThumbnail;
+        });
+      }
+
+      // Load ending thumbnail if selected
+      let endingThumbnailImg: HTMLImageElement | null = null;
+      if (selectedEndingThumbnail && showEndingThumbnail) {
+        endingThumbnailImg = document.createElement('img');
+        endingThumbnailImg.crossOrigin = 'anonymous';
+        
+        await new Promise<void>((resolve, reject) => {
+          endingThumbnailImg!.onload = () => resolve();
+          endingThumbnailImg!.onerror = () => reject(new Error('Failed to load ending thumbnail'));
+          endingThumbnailImg!.src = selectedEndingThumbnail;
         });
       }
 
@@ -739,8 +769,31 @@ Return ONLY the script text with exactly ${targetWords} words, no formatting or 
         ctx.fillStyle = '#000000';
         ctx.fillRect(0, 0, width, height);
 
+        // Calculate total duration in seconds
+        const totalDurationSeconds = totalDuration / 1000;
+        const endingThumbnailDuration = 3; // Fixed 3 seconds for ending thumbnail
+        const endingThumbnailStartTime = totalDurationSeconds - endingThumbnailDuration;
+
+        // Show ending thumbnail for the last 3 seconds if enabled
+        if (endingThumbnailImg && showEndingThumbnail && currentTime >= endingThumbnailStartTime) {
+          // Draw ending thumbnail scaled to fit canvas
+          const aspectRatio = endingThumbnailImg.naturalWidth / endingThumbnailImg.naturalHeight;
+          let drawWidth = width;
+          let drawHeight = height;
+          
+          if (aspectRatio > (width / height)) {
+            drawHeight = width / aspectRatio;
+          } else {
+            drawWidth = height * aspectRatio;
+          }
+          
+          const x = (width - drawWidth) / 2;
+          const y = (height - drawHeight) / 2;
+          
+          ctx.drawImage(endingThumbnailImg, x, y, drawWidth, drawHeight);
+        }
         // Show thumbnail for the first few seconds if enabled
-        if (thumbnailImg && showThumbnail && currentTime < thumbnailDuration) {
+        else if (thumbnailImg && showThumbnail && currentTime < thumbnailDuration) {
           // Draw thumbnail scaled to fit canvas
           const aspectRatio = thumbnailImg.naturalWidth / thumbnailImg.naturalHeight;
           let drawWidth = width;
@@ -1152,6 +1205,73 @@ Return ONLY the script text with exactly ${targetWords} words, no formatting or 
                         onChange={(e) => setThumbnailDuration(Number(e.target.value))}
                         className="w-full"
                       />
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Ending Thumbnail Upload */}
+            {audioGenerated && (
+              <div className="bg-black border-2 border-white rounded-lg p-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-white font-bold text-lg flex items-center gap-2">
+                    <ImageIcon className="w-5 h-5" />
+                    Ending Thumbnail (Optional)
+                  </h3>
+                  <button
+                    onClick={() => setShowEndingThumbnail(!showEndingThumbnail)}
+                    className="flex items-center gap-2 px-3 py-1 bg-black border-2 border-white text-white hover:bg-white hover:text-black rounded transition-colors"
+                  >
+                    {showEndingThumbnail ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                    {showEndingThumbnail ? 'Show' : 'Hide'}
+                  </button>
+                </div>
+                
+                <div className="space-y-4">
+                  <button
+                    onClick={() => endingThumbnailFileInputRef.current?.click()}
+                    className="w-full bg-white hover:bg-gray-200 text-black px-4 py-3 rounded font-bold transition-colors border-2 border-white flex items-center justify-center gap-2"
+                  >
+                    <Upload className="w-5 h-5" />
+                    Upload Ending Thumbnail
+                  </button>
+                  
+                  <input
+                    ref={endingThumbnailFileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleEndingThumbnailUpload}
+                    className="hidden"
+                  />
+                  
+                  {uploadedEndingThumbnails.length > 0 && (
+                    <div>
+                      <label className="block text-white font-bold mb-2">Select Ending Thumbnail</label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {uploadedEndingThumbnails.map((url, index) => (
+                          <button
+                            key={index}
+                            onClick={() => setSelectedEndingThumbnail(url)}
+                            className={`aspect-video rounded border-2 overflow-hidden transition-colors ${
+                              selectedEndingThumbnail === url
+                                ? 'border-white'
+                                : 'border-gray-600 hover:border-white'
+                            }`}
+                          >
+                            <img src={url} alt={`Ending Thumbnail ${index + 1}`} className="w-full h-full object-cover" />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {selectedEndingThumbnail && (
+                    <div>
+                      <p className="text-white font-bold mb-2">Duration: 3 seconds (fixed)</p>
+                      <p className="text-gray-400 text-sm">
+                        The ending thumbnail will appear for the last 3 seconds of the video.
+                      </p>
                     </div>
                   )}
                 </div>
